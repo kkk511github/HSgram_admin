@@ -1,4 +1,5 @@
 data/
+backend/admin-api
 backend/.env
 deploy/public.env
 *.log
