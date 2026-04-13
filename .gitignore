@@ -1,0 +1,4 @@
+data/
+backend/.env
+deploy/public.env
+*.log

@@ -1,0 +1,40 @@
+services:
+  admin-api:
+    image: ${ADMIN_IMAGE:-hsgram_admin-admin-api:latest}
+    restart: always
+    environment:
+      ADMIN_DATABASE_DSN: ${ADMIN_DATABASE_DSN}
+      ADMIN_ENABLE_BROADCASTS: ${ADMIN_ENABLE_BROADCASTS:-false}
+      ADMIN_MSG_RPC_ADDR: ${ADMIN_MSG_RPC_ADDR:-}
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
+      ADMIN_TOKEN_TTL: ${ADMIN_TOKEN_TTL:-12h}
+      ADMIN_BOOTSTRAP_USERNAME: ${ADMIN_BOOTSTRAP_USERNAME:-admin}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - admin_net
+      - hsgram_server_teamgram_net
+
+  caddy:
+    image: caddy:2.8
+    restart: always
+    depends_on:
+      admin-api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    environment:
+      ADMIN_SITE_ADDRESS: ${ADMIN_SITE_ADDRESS}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy/data:/data
+      - ./data/caddy/config:/config
+    networks:
+      - admin_net
+
+networks:
+  admin_net:
+    driver: bridge
+  hsgram_server_teamgram_net:
+    external: true
