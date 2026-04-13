@@ -12,6 +12,8 @@ type Config struct {
 	DatabaseDSN       string
 	EnableBroadcasts  bool
 	MsgRPCAddr        string
+	ReleasesDir       string
+	PublicBaseURL     string
 	JWTSecret         string
 	TokenTTL          time.Duration
 	BootstrapUsername string
@@ -30,6 +32,8 @@ func Load() (Config, error) {
 		DatabaseDSN:       os.Getenv("ADMIN_DATABASE_DSN"),
 		EnableBroadcasts:  getEnvBool("ADMIN_ENABLE_BROADCASTS", false),
 		MsgRPCAddr:        strings.TrimSpace(os.Getenv("ADMIN_MSG_RPC_ADDR")),
+		ReleasesDir:       strings.TrimSpace(getEnv("ADMIN_RELEASES_DIR", "./releases")),
+		PublicBaseURL:     strings.TrimRight(strings.TrimSpace(os.Getenv("ADMIN_PUBLIC_BASE_URL")), "/"),
 		JWTSecret:         os.Getenv("ADMIN_JWT_SECRET"),
 		TokenTTL:          tokenTTL,
 		BootstrapUsername: getEnv("ADMIN_BOOTSTRAP_USERNAME", "admin"),

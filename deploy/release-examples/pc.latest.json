@@ -1,0 +1,6 @@
+{
+  "version": "2.0.0",
+  "version_code": 2000,
+  "download_url": "/releases/pc/HSgram-pc-2.0.0.exe",
+  "changelog": "- Add minimal installer-based OTA flow"
+}

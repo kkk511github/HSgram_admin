@@ -1,0 +1,6 @@
+{
+  "version": "1.2.3",
+  "version_code": 123,
+  "file_url": "/releases/android/HSgram-android-1.2.3.apk",
+  "changelog": "- Fix OTA manifest wiring\n- Improve update prompt handling"
+}

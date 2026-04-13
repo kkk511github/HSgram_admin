@@ -20,7 +20,9 @@ type Handler struct {
 	tokens     *auth.Manager
 	store      *store.Store
 	broadcasts *broadcast.Service
+	updates    UpdateConfig
 	web        http.Handler
+	releases   http.Handler
 	logins     *loginLimiter
 }
 
@@ -34,17 +36,21 @@ type featureFlags struct {
 	Broadcasts bool `json:"broadcasts"`
 }
 
-func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Service) http.Handler {
+func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Service, updates UpdateConfig) http.Handler {
 	handler := &Handler{
 		tokens:     tokens,
 		store:      userStore,
 		broadcasts: broadcasts,
+		updates:    updates,
 		web:        webui.NewHandler(),
+		releases:   http.StripPrefix("/releases/", http.FileServer(http.Dir(updates.ReleasesDir))),
 		logins:     newLoginLimiter(5, 15*time.Minute, 15*time.Minute),
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/healthz", handler.handleHealthz)
+	mux.HandleFunc("/api/updates/android/latest", handler.handleAndroidUpdateLatest)
+	mux.HandleFunc("/api/updates/pc/latest", handler.handlePCUpdateLatest)
 	mux.HandleFunc("/api/admin/login", handler.handleLogin)
 	mux.Handle("/api/admin/me", handler.requireAuth(handler.handleMe))
 	mux.Handle("/api/admin/users", handler.requireAuth(handler.handleUsers))
@@ -52,6 +58,8 @@ func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Ser
 	mux.Handle("/api/admin/broadcasts/preview", handler.requireSuperAdmin(handler.handleBroadcastPreview))
 	mux.Handle("/api/admin/broadcasts", handler.requireSuperAdmin(handler.handleBroadcastRoutes))
 	mux.Handle("/api/admin/broadcasts/", handler.requireSuperAdmin(handler.handleBroadcastRoutes))
+	mux.HandleFunc("/td/current", handler.handleTDesktopCurrent)
+	mux.Handle("/releases/", handler.releases)
 	mux.Handle("/", handler.web)
 	return withSecurityHeaders(withJSONDefaults(mux))
 }

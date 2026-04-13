@@ -59,7 +59,10 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		broadcaster = broadcast.New(userStore, msgClient)
 	}
 
-	handler := httpapi.New(tokenMgr, userStore, broadcaster)
+	handler := httpapi.New(tokenMgr, userStore, broadcaster, httpapi.UpdateConfig{
+		ReleasesDir:   cfg.ReleasesDir,
+		PublicBaseURL: cfg.PublicBaseURL,
+	})
 
 	return &App{
 		cfg:         cfg,

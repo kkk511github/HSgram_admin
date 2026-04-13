@@ -6,10 +6,14 @@ services:
       ADMIN_DATABASE_DSN: ${ADMIN_DATABASE_DSN}
       ADMIN_ENABLE_BROADCASTS: ${ADMIN_ENABLE_BROADCASTS:-false}
       ADMIN_MSG_RPC_ADDR: ${ADMIN_MSG_RPC_ADDR:-}
+      ADMIN_RELEASES_DIR: ${ADMIN_RELEASES_DIR:-/app/releases}
+      ADMIN_PUBLIC_BASE_URL: ${ADMIN_PUBLIC_BASE_URL}
       ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
       ADMIN_TOKEN_TTL: ${ADMIN_TOKEN_TTL:-12h}
       ADMIN_BOOTSTRAP_USERNAME: ${ADMIN_BOOTSTRAP_USERNAME:-admin}
       ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD}
+    volumes:
+      - ./data/releases:/app/releases:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
