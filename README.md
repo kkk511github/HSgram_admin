@@ -61,7 +61,7 @@ go run ./cmd/admin-api
 - `ADMIN_DATABASE_DSN=...`
 - `ADMIN_JWT_SECRET=强随机密钥`
 - `ADMIN_BOOTSTRAP_PASSWORD=强密码`
-- `ADMIN_ENABLE_BROADCASTS=false`
+- `ADMIN_ENABLE_BROADCASTS=true`（轻量部署可改为 `false`）
 - `ADMIN_RELEASES_DIR=/app/releases`
 - `ADMIN_PUBLIC_BASE_URL=https://admin.example.com`
 
@@ -71,8 +71,7 @@ go run ./cmd/admin-api
 - 如果 MySQL 在另一台机器，请把 `host.docker.internal` 改成真实数据库地址
 - 上面的 `host.docker.internal` 之所以可用，是因为 `docker-compose.public.yaml` 已通过 `extra_hosts` 把它映射到了宿主机网关；如果你不用这份 compose，需要自己补这层映射
 - 如果 MySQL 只监听 `127.0.0.1`，容器通常仍然连不上；正式部署时请确认 MySQL 监听地址允许来自 Docker 容器所在网段，或直接把数据库部署到同一 Docker 网络里
-- `ADMIN_ENABLE_BROADCASTS=false` 时，后台只启用用户管理能力，不依赖消息服务链路，最适合 `4核8G` 的轻量部署
-- 只有要使用系统广播时，才把 `ADMIN_ENABLE_BROADCASTS=true`，并同时配置可用的 `ADMIN_MSG_RPC_ADDR`
+- 默认 `ADMIN_ENABLE_BROADCASTS=true`，需配置可用的 `ADMIN_MSG_RPC_ADDR`；若只要用户管理、不想连消息服务，可设为 `false`（适合 `4核8G` 等轻量部署）
 - `ADMIN_RELEASES_DIR` 对应容器内的 OTA 制品目录；默认 compose 已把宿主机 `./data/releases` 挂载到 `/app/releases`
 - `ADMIN_PUBLIC_BASE_URL` 用来把 manifest 里的相对路径补成完整下载地址，建议填最终公网地址
 
@@ -313,7 +312,7 @@ docker compose -f docker-compose.optional.yaml up -d
 
 - `ADMIN_IMAGE`: 预构建的 Admin 镜像名，服务器部署时直接复用
 - `ADMIN_DATABASE_DSN`: HSgram MySQL 连接串
-- `ADMIN_ENABLE_BROADCASTS`: 是否启用系统广播，默认 `false`
+- `ADMIN_ENABLE_BROADCASTS`: 是否启用系统广播，默认 `true`（未设置环境变量时由程序默认值与 compose 占位决定）
 - `ADMIN_MSG_RPC_ADDR`: 广播启用时的消息服务地址
 - `ADMIN_RELEASES_DIR`: OTA 制品目录，默认本地开发用 `./releases`，compose 默认为 `/app/releases`
 - `ADMIN_PUBLIC_BASE_URL`: 对外基准地址，用来把 manifest 里的相对下载路径转换成完整 URL
