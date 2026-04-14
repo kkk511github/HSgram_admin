@@ -33,6 +33,10 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		_ = userStore.Close()
 		return nil, err
 	}
+	if err := userStore.EnsureReleaseSchema(ctx); err != nil {
+		_ = userStore.Close()
+		return nil, err
+	}
 	if err := userStore.EnsureBootstrapAdmin(ctx, cfg.BootstrapUsername, cfg.BootstrapPassword); err != nil {
 		_ = userStore.Close()
 		return nil, err
@@ -79,8 +83,8 @@ func (a *App) Run(ctx context.Context) error {
 		Addr:              a.cfg.ListenAddr,
 		Handler:           a.handler,
 		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      15 * time.Second,
+		ReadTimeout:       a.cfg.HTTPReadTimeout,
+		WriteTimeout:      a.cfg.HTTPWriteTimeout,
 	}
 
 	errCh := make(chan error, 1)

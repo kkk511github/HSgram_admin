@@ -187,14 +187,17 @@ https://admin.example.com/td
 
 ### 发布流程
 
-1. 把 Android APK 和 PC 安装包复制到宿主机 `HSgram_admin/data/releases/android`、`HSgram_admin/data/releases/pc`
-2. 生成或更新各自的 `latest.json`
-3. 确认 `https://admin.example.com/api/updates/android/latest` 和 `https://admin.example.com/td/current` 可访问
-4. 用旧版本客户端验证检查更新、下载和安装流程
+1. 在管理后台登录 `super_admin`
+2. 在“安装包发布”卡片里选择 `Android` 或 `PC`
+3. 填写版本号、版本编码、更新说明并上传安装包
+4. 在右侧发布历史中选择刚上传的记录，点击“发布为最新版本”
+5. 如果需要通知用户，勾选“发布后广播通知全体用户”
+6. 确认 `https://admin.example.com/api/updates/android/latest` 或 `https://admin.example.com/td/current` 返回了新版本
+7. 用旧版本客户端验证检查更新、下载和安装流程
 
-### 发布新安装包
+### 后台上传说明
 
-当前版本还没有做“后台上传制品”页面，发布新版本时直接替换宿主机目录中的安装包和 `latest.json` 即可。
+当前后台已经支持可视化上传、发布历史和一键发布。第一期仍然把制品落到宿主机磁盘，因此 Admin 服务器需要保留 `data/releases` 目录。
 
 制品目录：
 
@@ -211,14 +214,15 @@ HSgram_admin/data/releases/
 说明：
 
 - `docker-compose.public.yaml` 已把宿主机 `./data/releases` 挂载到容器内 `/app/releases`
-- 后台每次请求都会直接读取磁盘上的 manifest 和安装包
-- 正常情况下，替换文件后不需要重启 `admin-api`
+- 安装包上传成功后，会自动写入数据库发布记录
+- 点击“发布为最新版本”后，公开 OTA manifest 会直接从数据库生成
+- 正常情况下，上传和发布后都不需要重启 `admin-api`
 
 #### Android 发布
 
 1. 构建新的 APK
-2. 把 APK 放到 `HSgram_admin/data/releases/android/HSgram-android-<version>.apk`
-3. 更新 `HSgram_admin/data/releases/android/latest.json`
+2. 在后台上传 Android 安装包
+3. 选择该记录并发布为最新版本
 4. 访问 manifest 和 APK 链接确认可下载
 
 Android manifest 模板：
@@ -240,8 +244,8 @@ Android manifest 模板：
 #### PC 发布
 
 1. 构建新的 PC 安装包，当前最小版支持普通安装包，例如 `.exe`、`.AppImage`、`.run`
-2. 把安装包放到 `HSgram_admin/data/releases/pc/HSgram-pc-<version>.exe`
-3. 更新 `HSgram_admin/data/releases/pc/latest.json`
+2. 在后台上传 PC 安装包
+3. 选择该记录并发布为最新版本
 4. 访问 manifest、兼容检查口和安装包链接确认可下载
 
 PC manifest 模板：
@@ -268,6 +272,11 @@ PC manifest 模板：
 3. 浏览器能正常打开 manifest URL
 4. 浏览器能正常下载安装包 URL
 5. 用旧版本客户端点“检查更新”验证弹窗、下载、安装流程
+
+### 兼容说明
+
+- 如果数据库里还没有任何发布记录，公开 OTA 接口仍会回退读取原来的 `latest.json`
+- 因此老的手工发版方式可以作为兜底，但后续建议统一走后台上传和发布
 
 ## 低压力部署顺序
 

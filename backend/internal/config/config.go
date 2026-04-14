@@ -16,6 +16,8 @@ type Config struct {
 	PublicBaseURL     string
 	JWTSecret         string
 	TokenTTL          time.Duration
+	HTTPReadTimeout   time.Duration
+	HTTPWriteTimeout  time.Duration
 	BootstrapUsername string
 	BootstrapPassword string
 }
@@ -27,6 +29,15 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("parse ADMIN_TOKEN_TTL: %w", err)
 	}
 
+	httpReadTimeout, err := time.ParseDuration(getEnv("ADMIN_HTTP_READ_TIMEOUT", "30m"))
+	if err != nil {
+		return Config{}, fmt.Errorf("parse ADMIN_HTTP_READ_TIMEOUT: %w", err)
+	}
+	httpWriteTimeout, err := time.ParseDuration(getEnv("ADMIN_HTTP_WRITE_TIMEOUT", "30m"))
+	if err != nil {
+		return Config{}, fmt.Errorf("parse ADMIN_HTTP_WRITE_TIMEOUT: %w", err)
+	}
+
 	cfg := Config{
 		ListenAddr:        getEnv("ADMIN_LISTEN_ADDR", ":8088"),
 		DatabaseDSN:       os.Getenv("ADMIN_DATABASE_DSN"),
@@ -36,6 +47,8 @@ func Load() (Config, error) {
 		PublicBaseURL:     strings.TrimRight(strings.TrimSpace(os.Getenv("ADMIN_PUBLIC_BASE_URL")), "/"),
 		JWTSecret:         os.Getenv("ADMIN_JWT_SECRET"),
 		TokenTTL:          tokenTTL,
+		HTTPReadTimeout:   httpReadTimeout,
+		HTTPWriteTimeout:  httpWriteTimeout,
 		BootstrapUsername: getEnv("ADMIN_BOOTSTRAP_USERNAME", "admin"),
 		BootstrapPassword: os.Getenv("ADMIN_BOOTSTRAP_PASSWORD"),
 	}

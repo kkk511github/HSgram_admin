@@ -12,6 +12,10 @@ const state = {
   broadcastPreview: null,
   broadcasts: [],
   selectedBroadcastId: null,
+  releases: [],
+  selectedReleaseId: null,
+  uploadProgress: 0,
+  uploadState: "idle",
 };
 
 const elements = {
@@ -55,6 +59,20 @@ const elements = {
   broadcastPreviewUsers: document.getElementById("broadcastPreviewUsers"),
   broadcastHistoryList: document.getElementById("broadcastHistoryList"),
   broadcastDetailList: document.getElementById("broadcastDetailList"),
+  releasePlatform: document.getElementById("releasePlatform"),
+  releaseVersion: document.getElementById("releaseVersion"),
+  releaseVersionCode: document.getElementById("releaseVersionCode"),
+  releaseChangelog: document.getElementById("releaseChangelog"),
+  releaseFile: document.getElementById("releaseFile"),
+  releaseUploadButton: document.getElementById("releaseUploadButton"),
+  releaseUploadStatus: document.getElementById("releaseUploadStatus"),
+  releaseUploadProgressBar: document.getElementById("releaseUploadProgressBar"),
+  releaseHistoryList: document.getElementById("releaseHistoryList"),
+  releaseDetailList: document.getElementById("releaseDetailList"),
+  releaseNotifyUsers: document.getElementById("releaseNotifyUsers"),
+  releasePublishMessage: document.getElementById("releasePublishMessage"),
+  releaseBroadcastNotice: document.getElementById("releaseBroadcastNotice"),
+  releasePublishButton: document.getElementById("releasePublishButton"),
   toast: document.getElementById("toast"),
 };
 
@@ -69,6 +87,9 @@ elements.kickSessionsButton.addEventListener("click", () => mutateSelectedUser("
 elements.broadcastTargetType.addEventListener("change", syncBroadcastTargetFields);
 elements.broadcastPreviewButton.addEventListener("click", previewBroadcast);
 elements.broadcastSendButton.addEventListener("click", sendBroadcast);
+elements.releaseUploadButton.addEventListener("click", uploadRelease);
+elements.releasePublishButton.addEventListener("click", publishSelectedRelease);
+elements.releaseNotifyUsers.addEventListener("change", syncReleaseBroadcastFields);
 elements.searchInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     runSearch();
@@ -89,6 +110,7 @@ async function bootstrap() {
     state.features = response.data.features || { broadcasts: false };
     renderLoggedIn();
     await loadUsers();
+    await loadReleases();
     if (state.features.broadcasts) {
       await loadBroadcasts();
     } else {
@@ -120,6 +142,7 @@ async function onLogin(event) {
 
     renderLoggedIn();
     await loadUsers();
+    await loadReleases();
     if (state.features.broadcasts) {
       await loadBroadcasts();
     } else {
@@ -139,6 +162,10 @@ function logout() {
   state.features = { broadcasts: false };
   state.users = [];
   state.selectedUserId = null;
+  state.releases = [];
+  state.selectedReleaseId = null;
+  state.uploadProgress = 0;
+  state.uploadState = "idle";
   localStorage.removeItem("hsgram_admin_token");
   renderLoggedOut();
 }
@@ -168,7 +195,16 @@ function renderLoggedIn() {
   elements.broadcastMessage.disabled = !state.features.broadcasts;
   elements.broadcastPreviewButton.disabled = !state.features.broadcasts;
   elements.broadcastSendButton.disabled = !state.features.broadcasts;
+  elements.releaseNotifyUsers.disabled = !state.features.broadcasts;
+  if (!state.features.broadcasts) {
+    elements.releaseNotifyUsers.checked = false;
+  }
+  elements.releaseBroadcastNotice.textContent = state.features.broadcasts
+    ? "勾选后会在发布成功后向全体用户创建一条系统广播通知。"
+    : "当前部署未开启广播能力，仍可上传并发布安装包。";
   syncBroadcastTargetFields();
+  syncReleaseBroadcastFields();
+  renderUploadProgress();
 }
 
 async function loadUsers() {
@@ -190,6 +226,223 @@ async function loadUsers() {
   renderUsers();
   elements.statusText.textContent = `共 ${state.total} 个用户`;
   elements.pageText.textContent = `第 ${state.page} 页`;
+}
+
+async function loadReleases() {
+  try {
+    const response = await api("/api/admin/releases");
+    state.releases = response.data || [];
+    renderReleases();
+    if (state.selectedReleaseId) {
+      const exists = state.releases.some((release) => release.id === state.selectedReleaseId);
+      if (exists) {
+        await loadReleaseDetail(state.selectedReleaseId);
+      } else {
+        state.selectedReleaseId = null;
+        renderReleaseDetail(null);
+      }
+    } else {
+      renderReleaseDetail(null);
+    }
+  } catch (error) {
+    elements.releaseHistoryList.innerHTML = `<div class="muted">发布历史加载失败</div>`;
+  }
+}
+
+function renderReleases() {
+  elements.releaseHistoryList.innerHTML = "";
+  if (!state.releases.length) {
+    elements.releaseHistoryList.innerHTML = `<div class="muted">暂无安装包发布记录</div>`;
+    return;
+  }
+
+  state.releases.forEach((release) => {
+    const item = document.createElement("div");
+    item.className = "list-item";
+    if (release.id === state.selectedReleaseId) {
+      item.style.borderColor = "#2f6fed";
+    }
+    item.innerHTML = `
+      <div class="list-item-title">#${release.id} ${escapeHTML(release.platform)} ${escapeHTML(release.version)}</div>
+      <div>版本编码: ${release.versionCode} | 状态: ${escapeHTML(release.status)}${release.isLatest ? " | 当前最新" : ""}</div>
+      <div>文件: ${escapeHTML(release.filename)} | 大小: ${formatFileSize(release.fileSize)}</div>
+    `;
+    item.addEventListener("click", () => loadReleaseDetail(release.id));
+    elements.releaseHistoryList.appendChild(item);
+  });
+}
+
+async function loadReleaseDetail(id) {
+  try {
+    const response = await api(`/api/admin/releases/${id}`);
+    state.selectedReleaseId = id;
+    renderReleases();
+    renderReleaseDetail(response.data);
+  } catch (error) {
+    toast(error.message || "加载发布详情失败");
+  }
+}
+
+function renderReleaseDetail(release) {
+  elements.releaseDetailList.innerHTML = "";
+  if (!release) {
+    elements.releasePublishButton.disabled = true;
+    elements.releaseDetailList.innerHTML = `<div class="muted">选择一条发布记录查看详情</div>`;
+    return;
+  }
+  elements.releasePublishButton.disabled = false;
+
+  const item = document.createElement("div");
+  item.className = "list-item";
+  item.innerHTML = `
+    <div class="list-item-title">${escapeHTML(release.platform)} ${escapeHTML(release.version)}${release.isLatest ? "（当前最新）" : ""}</div>
+    <div>版本编码: ${release.versionCode}</div>
+    <div>状态: ${escapeHTML(release.status)}</div>
+    <div>文件: ${escapeHTML(release.filename)}</div>
+    <div>大小: ${formatFileSize(release.fileSize)}</div>
+    <div>SHA256: ${escapeHTML(release.sha256 || "-")}</div>
+    <div>上传者: ${escapeHTML(release.createdByUsername || "-")} (${escapeHTML(release.createdByRole || "-")})</div>
+    <div>上传时间: ${formatDateTime(release.createdAt)}</div>
+    <div>发布时间: ${formatDateTime(release.publishedAt)}</div>
+    <div>下载地址: <a class="link-text" href="${escapeHTML(release.downloadUrl)}" target="_blank" rel="noopener noreferrer">打开下载链接</a></div>
+    <div>更新说明: ${escapeHTML(release.changelog || "-")}</div>
+  `;
+  elements.releaseDetailList.appendChild(item);
+}
+
+function syncReleaseBroadcastFields() {
+  const enabled = state.features.broadcasts && elements.releaseNotifyUsers.checked;
+  elements.releasePublishMessage.disabled = !enabled;
+}
+
+function renderUploadProgress() {
+  const percent = Math.max(0, Math.min(100, state.uploadProgress || 0));
+  elements.releaseUploadProgressBar.style.width = `${percent}%`;
+  switch (state.uploadState) {
+    case "uploading":
+      elements.releaseUploadStatus.textContent = `上传中 ${percent}%`;
+      break;
+    case "done":
+      elements.releaseUploadStatus.textContent = "上传完成";
+      break;
+    case "error":
+      if (!elements.releaseUploadStatus.textContent) {
+        elements.releaseUploadStatus.textContent = "上传失败";
+      }
+      break;
+    default:
+      elements.releaseUploadStatus.textContent = "上传后会写入后台制品目录，并记录到发布历史。";
+      elements.releaseUploadProgressBar.style.width = "0%";
+      break;
+  }
+  const busy = state.uploadState === "uploading";
+  elements.releaseUploadButton.disabled = busy;
+  elements.releasePublishButton.disabled = busy || !state.selectedReleaseId;
+  elements.releasePlatform.disabled = busy;
+  elements.releaseVersion.disabled = busy;
+  elements.releaseVersionCode.disabled = busy;
+  elements.releaseChangelog.disabled = busy;
+  elements.releaseFile.disabled = busy;
+}
+
+async function uploadRelease() {
+  const file = elements.releaseFile.files && elements.releaseFile.files[0];
+  if (!file) {
+    toast("请选择安装包文件");
+    return;
+  }
+  if (!elements.releaseVersion.value.trim()) {
+    toast("请填写版本号");
+    return;
+  }
+  if (!elements.releaseVersionCode.value.trim()) {
+    toast("请填写版本编码");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("platform", elements.releasePlatform.value);
+  formData.append("version", elements.releaseVersion.value.trim());
+  formData.append("versionCode", elements.releaseVersionCode.value.trim());
+  formData.append("changelog", elements.releaseChangelog.value.trim());
+  formData.append("file", file);
+
+  state.uploadState = "uploading";
+  state.uploadProgress = 0;
+  renderUploadProgress();
+
+  try {
+    const payload = await uploadWithProgress("/api/admin/releases/upload", formData, (percent) => {
+      state.uploadProgress = percent;
+      renderUploadProgress();
+    });
+    state.uploadState = "done";
+    state.uploadProgress = 100;
+    renderUploadProgress();
+    elements.releaseFile.value = "";
+    await loadReleases();
+    if (payload.data && payload.data.id) {
+      await loadReleaseDetail(payload.data.id);
+    }
+    toast("安装包上传成功");
+  } catch (error) {
+    state.uploadState = "error";
+    elements.releaseUploadStatus.textContent = error.message || "上传失败";
+    renderUploadProgress();
+    toast(error.message || "上传失败");
+  }
+}
+
+async function publishSelectedRelease() {
+  if (!state.selectedReleaseId) {
+    toast("请先选择一条发布记录");
+    return;
+  }
+
+  try {
+    const response = await api(`/api/admin/releases/${state.selectedReleaseId}/publish`, {
+      method: "POST",
+      body: JSON.stringify({
+        notifyUsers: !!elements.releaseNotifyUsers.checked,
+        messageText: elements.releasePublishMessage.value.trim(),
+      }),
+    });
+    await loadReleases();
+    await loadReleaseDetail(state.selectedReleaseId);
+    if (response.data && response.data.broadcastError) {
+      toast(`安装包已发布，但广播失败：${response.data.broadcastError}`);
+      return;
+    }
+    toast(elements.releaseNotifyUsers.checked ? "安装包已发布，并创建广播通知" : "安装包已发布为最新版本");
+  } catch (error) {
+    toast(error.message || "发布失败");
+  }
+}
+
+function uploadWithProgress(url, formData, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    if (state.token) {
+      xhr.setRequestHeader("Authorization", `Bearer ${state.token}`);
+    }
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable || !onProgress) {
+        return;
+      }
+      onProgress(Math.round((event.loaded / event.total) * 100));
+    };
+    xhr.onload = () => {
+      const payload = safeParseJSON(xhr.responseText);
+      if (xhr.status >= 200 && xhr.status < 300 && payload && payload.ok) {
+        resolve(payload);
+        return;
+      }
+      reject(new Error((payload && payload.error) || "upload failed"));
+    };
+    xhr.onerror = () => reject(new Error("upload failed"));
+    xhr.send(formData);
+  });
 }
 
 function renderUsers() {
@@ -549,6 +802,42 @@ function escapeHTML(input) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function safeParseJSON(input) {
+  try {
+    return JSON.parse(input);
+  } catch (error) {
+    return null;
+  }
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+  return date.toLocaleString();
+}
+
+function formatFileSize(size) {
+  const value = Number(size || 0);
+  if (!Number.isFinite(value) || value <= 0) {
+    return "-";
+  }
+  if (value < 1024) {
+    return `${value} B`;
+  }
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+  if (value < 1024 * 1024 * 1024) {
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 function toOptionalBool(value) {

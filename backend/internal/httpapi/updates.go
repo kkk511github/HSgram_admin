@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"hsgram-admin/backend/internal/store"
 )
 
 type UpdateConfig struct {
@@ -79,6 +82,21 @@ func (h *Handler) handleTDesktopCurrent(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *Handler) loadAndroidUpdateManifest(r *http.Request) (androidUpdateManifest, error) {
+	if h.store != nil {
+		release, err := h.store.GetLatestAppRelease(r.Context(), store.ReleasePlatformAndroid)
+		if err == nil {
+			return androidUpdateManifest{
+				Version:     release.Version,
+				VersionCode: release.VersionCode,
+				FileURL:     h.releaseDownloadURL(r, release.StoragePath),
+				Changelog:   release.Changelog,
+			}, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return androidUpdateManifest{}, err
+		}
+	}
+
 	var manifest androidUpdateManifest
 	if err := loadManifestFile(filepath.Join(h.updates.ReleasesDir, "android", "latest.json"), &manifest); err != nil {
 		return androidUpdateManifest{}, err
@@ -93,6 +111,21 @@ func (h *Handler) loadAndroidUpdateManifest(r *http.Request) (androidUpdateManif
 }
 
 func (h *Handler) loadPCUpdateManifest(r *http.Request) (pcUpdateManifest, error) {
+	if h.store != nil {
+		release, err := h.store.GetLatestAppRelease(r.Context(), store.ReleasePlatformPC)
+		if err == nil {
+			return pcUpdateManifest{
+				Version:     release.Version,
+				VersionCode: release.VersionCode,
+				DownloadURL: h.releaseDownloadURL(r, release.StoragePath),
+				Changelog:   release.Changelog,
+			}, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return pcUpdateManifest{}, err
+		}
+	}
+
 	var manifest pcUpdateManifest
 	if err := loadManifestFile(filepath.Join(h.updates.ReleasesDir, "pc", "latest.json"), &manifest); err != nil {
 		return pcUpdateManifest{}, err

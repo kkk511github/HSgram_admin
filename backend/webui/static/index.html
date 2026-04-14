@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HSgram Admin</title>
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/styles.css?v=20260414-1" />
   </head>
   <body>
     <div class="layout">
@@ -100,6 +100,75 @@
             </section>
           </div>
 
+          <section class="card release-card">
+            <div class="section-title">安装包发布</div>
+            <div class="muted">上传 Android / PC 安装包，发布为最新版本，并可选广播通知用户。</div>
+
+            <div class="release-grid">
+              <div class="stack">
+                <label>
+                  平台
+                  <select id="releasePlatform">
+                    <option value="android">Android</option>
+                    <option value="pc">PC</option>
+                  </select>
+                </label>
+
+                <div class="filter-grid">
+                  <label>
+                    版本号
+                    <input id="releaseVersion" placeholder="例如 1.2.4" />
+                  </label>
+                  <label>
+                    版本编码
+                    <input id="releaseVersionCode" type="number" min="1" placeholder="例如 124" />
+                  </label>
+                </div>
+
+                <label>
+                  更新说明
+                  <textarea id="releaseChangelog" rows="6" placeholder="填写版本更新说明"></textarea>
+                </label>
+
+                <label>
+                  安装包文件
+                  <input id="releaseFile" type="file" />
+                </label>
+
+                <div class="action-row compact">
+                  <button id="releaseUploadButton">上传安装包</button>
+                </div>
+
+                <div id="releaseUploadStatus" class="muted"></div>
+                <div class="progress-wrap">
+                  <div class="progress-track">
+                    <div id="releaseUploadProgressBar" class="progress-bar"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="stack">
+                <div class="section-title minor">发布历史</div>
+                <div id="releaseHistoryList" class="list"></div>
+                <div class="section-title minor">发布详情</div>
+                <div id="releaseDetailList" class="list"></div>
+
+                <label>
+                  <input id="releaseNotifyUsers" type="checkbox" />
+                  发布后广播通知全体用户
+                </label>
+                <label>
+                  广播内容
+                  <textarea id="releasePublishMessage" rows="5" placeholder="留空则自动生成更新通知"></textarea>
+                </label>
+                <div id="releaseBroadcastNotice" class="muted"></div>
+                <div class="action-row compact">
+                  <button id="releasePublishButton" class="secondary">发布为最新版本</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <section class="card broadcast-card">
             <div class="section-title">系统广播</div>
             <div class="muted">通过系统账号 `HSgram Notice` 发送普通私聊消息。</div>
@@ -181,6 +250,6 @@
     </div>
 
     <div id="toast" class="toast hidden"></div>
-    <script src="/app.js" defer></script>
+    <script src="/app.js?v=20260414-1" defer></script>
   </body>
 </html>

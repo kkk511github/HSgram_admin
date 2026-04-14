@@ -10,10 +10,12 @@ services:
       ADMIN_PUBLIC_BASE_URL: ${ADMIN_PUBLIC_BASE_URL}
       ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
       ADMIN_TOKEN_TTL: ${ADMIN_TOKEN_TTL:-12h}
+      ADMIN_HTTP_READ_TIMEOUT: ${ADMIN_HTTP_READ_TIMEOUT:-30m}
+      ADMIN_HTTP_WRITE_TIMEOUT: ${ADMIN_HTTP_WRITE_TIMEOUT:-30m}
       ADMIN_BOOTSTRAP_USERNAME: ${ADMIN_BOOTSTRAP_USERNAME:-admin}
       ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD}
     volumes:
-      - ./data/releases:/app/releases:ro
+      - ./data/releases:/app/releases
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

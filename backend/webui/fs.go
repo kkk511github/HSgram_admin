@@ -18,15 +18,19 @@ func NewHandler() http.Handler {
 	fileServer := http.FileServer(http.FS(sub))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" || r.URL.Path == "" {
+			w.Header().Set("Cache-Control", "no-store")
 			http.ServeFileFS(w, r, sub, "index.html")
 			return
 		}
 
-		if _, err := fs.Stat(sub, r.URL.Path[1:]); err == nil {
+		path := r.URL.Path[1:]
+		if _, err := fs.Stat(sub, path); err == nil {
+			w.Header().Set("Cache-Control", "no-store")
 			fileServer.ServeHTTP(w, r)
 			return
 		}
 
+		w.Header().Set("Cache-Control", "no-store")
 		http.ServeFileFS(w, r, sub, "index.html")
 	})
 }
