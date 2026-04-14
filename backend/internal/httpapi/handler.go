@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -11,19 +12,21 @@ import (
 	"time"
 
 	"hsgram-admin/backend/internal/auth"
+	"hsgram-admin/backend/internal/authsessionrpc"
 	"hsgram-admin/backend/internal/broadcast"
 	"hsgram-admin/backend/internal/store"
 	"hsgram-admin/backend/webui"
 )
 
 type Handler struct {
-	tokens     *auth.Manager
-	store      *store.Store
-	broadcasts *broadcast.Service
-	updates    UpdateConfig
-	web        http.Handler
-	releases   http.Handler
-	logins     *loginLimiter
+	tokens       *auth.Manager
+	store        *store.Store
+	broadcasts   *broadcast.Service
+	authsessions *authsessionrpc.Client
+	updates      UpdateConfig
+	web          http.Handler
+	releases     http.Handler
+	logins       *loginLimiter
 }
 
 type apiResponse struct {
@@ -36,15 +39,16 @@ type featureFlags struct {
 	Broadcasts bool `json:"broadcasts"`
 }
 
-func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Service, updates UpdateConfig) http.Handler {
+func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Service, authsessions *authsessionrpc.Client, updates UpdateConfig) http.Handler {
 	handler := &Handler{
-		tokens:     tokens,
-		store:      userStore,
-		broadcasts: broadcasts,
-		updates:    updates,
-		web:        webui.NewHandler(),
-		releases:   http.StripPrefix("/releases/", http.FileServer(http.Dir(updates.ReleasesDir))),
-		logins:     newLoginLimiter(5, 15*time.Minute, 15*time.Minute),
+		tokens:       tokens,
+		store:        userStore,
+		broadcasts:   broadcasts,
+		authsessions: authsessions,
+		updates:      updates,
+		web:          webui.NewHandler(),
+		releases:     http.StripPrefix("/releases/", http.FileServer(http.Dir(updates.ReleasesDir))),
+		logins:       newLoginLimiter(5, 15*time.Minute, 15*time.Minute),
 	}
 
 	mux := http.NewServeMux()
@@ -230,6 +234,18 @@ func (h *Handler) handleUserDetail(w http.ResponseWriter, r *http.Request, admin
 	})
 }
 
+func (h *Handler) revokeUserSessions(ctx context.Context, userID int64) (int64, error) {
+	if h.authsessions != nil {
+		keyIDs, err := h.authsessions.ResetAllAuthorizations(ctx, userID)
+		if err != nil {
+			return 0, err
+		}
+		return int64(len(keyIDs)), nil
+	}
+
+	return h.store.KickUserSessions(ctx, userID)
+}
+
 func (h *Handler) handleBan(w http.ResponseWriter, r *http.Request, admin store.AdminUser, userID int64) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -253,11 +269,18 @@ func (h *Handler) handleBan(w http.ResponseWriter, r *http.Request, admin store.
 		return
 	}
 
+	affected, err := h.revokeUserSessions(r.Context(), userID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "ban user failed")
+		return
+	}
+
 	_ = h.store.CreateAuditLog(r.Context(), admin, "user.ban", userID, map[string]any{
-		"reason": request.Reason,
+		"reason":   request.Reason,
+		"affected": affected,
 	})
 
-	writeJSON(w, http.StatusOK, apiResponse{OK: true})
+	writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: map[string]any{"affected": affected}})
 }
 
 func (h *Handler) handleUnban(w http.ResponseWriter, r *http.Request, admin store.AdminUser, userID int64) {
@@ -286,7 +309,7 @@ func (h *Handler) handleKickSessions(w http.ResponseWriter, r *http.Request, adm
 		return
 	}
 
-	affected, err := h.store.KickUserSessions(r.Context(), userID)
+	affected, err := h.revokeUserSessions(r.Context(), userID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "kick sessions failed")
 		return

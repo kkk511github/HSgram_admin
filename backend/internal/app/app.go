@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"hsgram-admin/backend/internal/auth"
+	"hsgram-admin/backend/internal/authsessionrpc"
 	"hsgram-admin/backend/internal/broadcast"
 	"hsgram-admin/backend/internal/config"
 	"hsgram-admin/backend/internal/httpapi"
@@ -16,12 +17,13 @@ import (
 )
 
 type App struct {
-	cfg         config.Config
-	store       *store.Store
-	tokenMgr    *auth.Manager
-	msgClient   *messenger.Client
-	broadcaster *broadcast.Service
-	handler     http.Handler
+	cfg               config.Config
+	store             *store.Store
+	tokenMgr          *auth.Manager
+	msgClient         *messenger.Client
+	authsessionClient *authsessionrpc.Client
+	broadcaster       *broadcast.Service
+	handler           http.Handler
 }
 
 func New(ctx context.Context, cfg config.Config) (*App, error) {
@@ -45,6 +47,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 
 	tokenMgr := auth.NewManager(cfg.JWTSecret, cfg.TokenTTL)
 	var msgClient *messenger.Client
+	var authsessionClient *authsessionrpc.Client
 	var broadcaster *broadcast.Service
 	if cfg.EnableBroadcasts {
 		if err := userStore.EnsureBroadcastSchema(ctx); err != nil {
@@ -68,18 +71,32 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		}
 	}
 
-	handler := httpapi.New(tokenMgr, userStore, broadcaster, httpapi.UpdateConfig{
+	if cfg.AuthsessionRPCAddr != "" {
+		authsessionClient, err = authsessionrpc.New(cfg.AuthsessionRPCAddr)
+		if err != nil {
+			if msgClient != nil {
+				_ = msgClient.Close()
+			}
+			_ = userStore.Close()
+			return nil, err
+		}
+	} else {
+		log.Printf("admin-api: ADMIN_AUTHSESSION_RPC_ADDR is empty; session revocation falls back to database-only mode")
+	}
+
+	handler := httpapi.New(tokenMgr, userStore, broadcaster, authsessionClient, httpapi.UpdateConfig{
 		ReleasesDir:   cfg.ReleasesDir,
 		PublicBaseURL: cfg.PublicBaseURL,
 	})
 
 	return &App{
-		cfg:         cfg,
-		store:       userStore,
-		tokenMgr:    tokenMgr,
-		msgClient:   msgClient,
-		broadcaster: broadcaster,
-		handler:     handler,
+		cfg:               cfg,
+		store:             userStore,
+		tokenMgr:          tokenMgr,
+		msgClient:         msgClient,
+		authsessionClient: authsessionClient,
+		broadcaster:       broadcaster,
+		handler:           handler,
 	}, nil
 }
 
@@ -122,9 +139,20 @@ func (a *App) Run(ctx context.Context) error {
 }
 
 func (a *App) Close() error {
-	if err := a.msgClient.Close(); err != nil {
-		_ = a.store.Close()
-		return err
+	if a.msgClient != nil {
+		if err := a.msgClient.Close(); err != nil {
+			if a.authsessionClient != nil {
+				_ = a.authsessionClient.Close()
+			}
+			_ = a.store.Close()
+			return err
+		}
+	}
+	if a.authsessionClient != nil {
+		if err := a.authsessionClient.Close(); err != nil {
+			_ = a.store.Close()
+			return err
+		}
 	}
 	return a.store.Close()
 }

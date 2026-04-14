@@ -8,18 +8,19 @@ import (
 )
 
 type Config struct {
-	ListenAddr        string
-	DatabaseDSN       string
-	EnableBroadcasts  bool
-	MsgRPCAddr        string
-	ReleasesDir       string
-	PublicBaseURL     string
-	JWTSecret         string
-	TokenTTL          time.Duration
-	HTTPReadTimeout   time.Duration
-	HTTPWriteTimeout  time.Duration
-	BootstrapUsername string
-	BootstrapPassword string
+	ListenAddr         string
+	DatabaseDSN        string
+	EnableBroadcasts   bool
+	MsgRPCAddr         string
+	AuthsessionRPCAddr string
+	ReleasesDir        string
+	PublicBaseURL      string
+	JWTSecret          string
+	TokenTTL           time.Duration
+	HTTPReadTimeout    time.Duration
+	HTTPWriteTimeout   time.Duration
+	BootstrapUsername  string
+	BootstrapPassword  string
 }
 
 func Load() (Config, error) {
@@ -39,18 +40,19 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		ListenAddr:        getEnv("ADMIN_LISTEN_ADDR", ":8088"),
-		DatabaseDSN:       os.Getenv("ADMIN_DATABASE_DSN"),
-		EnableBroadcasts:  getEnvBool("ADMIN_ENABLE_BROADCASTS", true),
-		MsgRPCAddr:        strings.TrimSpace(os.Getenv("ADMIN_MSG_RPC_ADDR")),
-		ReleasesDir:       strings.TrimSpace(getEnv("ADMIN_RELEASES_DIR", "./releases")),
-		PublicBaseURL:     strings.TrimRight(strings.TrimSpace(os.Getenv("ADMIN_PUBLIC_BASE_URL")), "/"),
-		JWTSecret:         os.Getenv("ADMIN_JWT_SECRET"),
-		TokenTTL:          tokenTTL,
-		HTTPReadTimeout:   httpReadTimeout,
-		HTTPWriteTimeout:  httpWriteTimeout,
-		BootstrapUsername: getEnv("ADMIN_BOOTSTRAP_USERNAME", "admin"),
-		BootstrapPassword: os.Getenv("ADMIN_BOOTSTRAP_PASSWORD"),
+		ListenAddr:         getEnv("ADMIN_LISTEN_ADDR", ":8088"),
+		DatabaseDSN:        os.Getenv("ADMIN_DATABASE_DSN"),
+		EnableBroadcasts:   getEnvBool("ADMIN_ENABLE_BROADCASTS", true),
+		MsgRPCAddr:         strings.TrimSpace(os.Getenv("ADMIN_MSG_RPC_ADDR")),
+		AuthsessionRPCAddr: strings.TrimSpace(os.Getenv("ADMIN_AUTHSESSION_RPC_ADDR")),
+		ReleasesDir:        strings.TrimSpace(getEnv("ADMIN_RELEASES_DIR", "./releases")),
+		PublicBaseURL:      strings.TrimRight(strings.TrimSpace(os.Getenv("ADMIN_PUBLIC_BASE_URL")), "/"),
+		JWTSecret:          os.Getenv("ADMIN_JWT_SECRET"),
+		TokenTTL:           tokenTTL,
+		HTTPReadTimeout:    httpReadTimeout,
+		HTTPWriteTimeout:   httpWriteTimeout,
+		BootstrapUsername:  getEnv("ADMIN_BOOTSTRAP_USERNAME", "admin"),
+		BootstrapPassword:  os.Getenv("ADMIN_BOOTSTRAP_PASSWORD"),
 	}
 
 	if cfg.DatabaseDSN == "" {
