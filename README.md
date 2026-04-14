@@ -71,7 +71,7 @@ go run ./cmd/admin-api
 - 如果 MySQL 在另一台机器，请把 `host.docker.internal` 改成真实数据库地址
 - 上面的 `host.docker.internal` 之所以可用，是因为 `docker-compose.public.yaml` 已通过 `extra_hosts` 把它映射到了宿主机网关；如果你不用这份 compose，需要自己补这层映射
 - 如果 MySQL 只监听 `127.0.0.1`，容器通常仍然连不上；正式部署时请确认 MySQL 监听地址允许来自 Docker 容器所在网段，或直接把数据库部署到同一 Docker 网络里
-- 默认 `ADMIN_ENABLE_BROADCASTS=true`，需配置可用的 `ADMIN_MSG_RPC_ADDR`；若只要用户管理、不想连消息服务，可设为 `false`（适合 `4核8G` 等轻量部署）
+- 默认 `ADMIN_ENABLE_BROADCASTS=true`；`docker-compose.public.yaml` 会为 `ADMIN_MSG_RPC_ADDR` 提供与 HSgram 默认容器名一致的占位，一般无需再配。若未连上 msg 或地址留空，进程仍会启动，只是广播投递不可用，直到地址可用。若完全不要广播，可设 `ADMIN_ENABLE_BROADCASTS=false`（适合 `4核8G` 等轻量部署）
 - `ADMIN_RELEASES_DIR` 对应容器内的 OTA 制品目录；默认 compose 已把宿主机 `./data/releases` 挂载到 `/app/releases`
 - `ADMIN_PUBLIC_BASE_URL` 用来把 manifest 里的相对路径补成完整下载地址，建议填最终公网地址
 
@@ -312,8 +312,8 @@ docker compose -f docker-compose.optional.yaml up -d
 
 - `ADMIN_IMAGE`: 预构建的 Admin 镜像名，服务器部署时直接复用
 - `ADMIN_DATABASE_DSN`: HSgram MySQL 连接串
-- `ADMIN_ENABLE_BROADCASTS`: 是否启用系统广播，默认 `true`（未设置环境变量时由程序默认值与 compose 占位决定）
-- `ADMIN_MSG_RPC_ADDR`: 广播启用时的消息服务地址
+- `ADMIN_ENABLE_BROADCASTS`: 是否启用系统广播（含库表与系统账号准备），默认 `true`
+- `ADMIN_MSG_RPC_ADDR`: 消息服务 gRPC 地址；未设置时进程仍可启动，但不会连接 msg、广播 API 表现为未就绪。`docker-compose.public.yaml` 默认 `hsgram_server-teamgram-1:20030`
 - `ADMIN_RELEASES_DIR`: OTA 制品目录，默认本地开发用 `./releases`，compose 默认为 `/app/releases`
 - `ADMIN_PUBLIC_BASE_URL`: 对外基准地址，用来把 manifest 里的相对下载路径转换成完整 URL
 - `ADMIN_JWT_SECRET`: 后台 JWT 签名密钥

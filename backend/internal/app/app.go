@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -55,12 +56,16 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 			return nil, err
 		}
 
-		msgClient, err = messenger.New(cfg.MsgRPCAddr)
-		if err != nil {
-			_ = userStore.Close()
-			return nil, err
+		if cfg.MsgRPCAddr != "" {
+			msgClient, err = messenger.New(cfg.MsgRPCAddr)
+			if err != nil {
+				_ = userStore.Close()
+				return nil, err
+			}
+			broadcaster = broadcast.New(userStore, msgClient)
+		} else {
+			log.Printf("admin-api: ADMIN_ENABLE_BROADCASTS is true but ADMIN_MSG_RPC_ADDR is empty; broadcast API stays disabled until msg RPC is set")
 		}
-		broadcaster = broadcast.New(userStore, msgClient)
 	}
 
 	handler := httpapi.New(tokenMgr, userStore, broadcaster, httpapi.UpdateConfig{

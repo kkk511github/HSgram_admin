@@ -62,9 +62,6 @@ func Load() (Config, error) {
 	if cfg.BootstrapPassword == "" {
 		return Config{}, fmt.Errorf("ADMIN_BOOTSTRAP_PASSWORD is required")
 	}
-	if cfg.EnableBroadcasts && cfg.MsgRPCAddr == "" {
-		return Config{}, fmt.Errorf("ADMIN_MSG_RPC_ADDR is required when ADMIN_ENABLE_BROADCASTS=true")
-	}
 
 	return cfg, nil
 }
