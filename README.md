@@ -330,3 +330,23 @@ docker compose -f docker-compose.optional.yaml up -d
 - 审计日志和 `role` 字段已预留，后续可以继续扩展成 RBAC。
 - `auth_users` 兼容新旧字段结构，适配已有迁移差异。
 - 若只用公网 IP 而没有域名，HTTPS 证书自动签发通常不可用，建议正式环境务必配域名。
+
+---
+
+## 换服务器 / 重新部署时要改什么（中文）
+
+Admin **不承载 MTProto**，换 IM 后端机器时，若**只迁 Teamgram 服务、Admin 域名与公网入口不变**，通常**不必改本仓库代码**；需要检查的是**环境变量与编排里写死的地址**。
+
+### 常见要动项
+
+| 项 | 说明 |
+|----|------|
+| **`ADMIN_DATABASE_DSN`** | 若 MySQL 迁到新主机或库名变化，更新 `deploy/public.env`（或你实际使用的 env 文件）。 |
+| **`ADMIN_MSG_RPC_ADDR`** | 若消息服务 gRPC 地址或 compose 服务名变化（例如 `docker-compose.public.yaml` 里默认的 `hsgram_server-teamgram-1:20030`），需与新网络一致。 |
+| **`ADMIN_PUBLIC_BASE_URL` / `ADMIN_SITE_ADDRESS`** | 后台对外域名或公网 IP 变化时，用于登录跳转、OTA manifest 完整 URL 等，需同步修改。 |
+| **`docker-compose.public.yaml` 或 Caddyfile** | 反代目标、端口、证书域名变更时检查。 |
+
+### 与 IM 三端的关系
+
+- **客户端（Android / iOS / PC）换 MTProto 入口**：见 **`HSgram_android/README.md`**、**`HSgram-ios/README.md`**、**`HSgram_pc/README.md`** 各节中文说明。  
+- **Teamgram 服务端 `config.json`、邀请链接 `-t.me` 等**：见 **`HSgram_server/README-zh.md`**「HSgram：换服务器 / 重新部署说明」。
