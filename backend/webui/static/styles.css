@@ -71,25 +71,183 @@ label {
 .layout {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 280px 1fr;
 }
 
 .sidebar {
-  padding: 24px;
-  background: #121826;
+  padding: 0;
+  background: linear-gradient(180deg, #151c2e 0%, #0f141f 100%);
   color: #fff;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  min-height: 100vh;
 }
 
-.sidebar h1 {
-  margin: 0 0 8px;
-  font-size: 24px;
+.sidebar-top {
+  padding: 22px 18px 16px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sidebar-bottom {
+  padding: 16px 18px 22px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.sidebar-brand h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.sidebar-tagline {
+  margin: 0;
+  font-size: 13px;
+  color: #8b98b3;
+}
+
+.sidebar-nav {
+  margin-top: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nav-section-title {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5c6a82;
+  margin-bottom: 4px;
+  padding-left: 12px;
+}
+
+.nav-item {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 12px;
+  margin: 0;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #e8edf7;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.nav-item.active {
+  background: rgba(47, 111, 237, 0.22);
+  border-color: rgba(47, 111, 237, 0.45);
+  color: #fff;
+}
+
+.nav-item.active .nav-desc {
+  color: #a8c4ff;
+}
+
+.nav-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.nav-item.active .nav-icon {
+  background: rgba(47, 111, 237, 0.35);
+}
+
+.nav-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nav-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.nav-desc {
+  font-size: 12px;
+  color: #8b98b3;
+  line-height: 1.35;
+}
+
+.sidebar-logout {
+  width: 100%;
+  margin-top: 4px;
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #f0f4fc !important;
+}
+
+.sidebar-logout:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18) !important;
 }
 
 .content {
-  padding: 24px;
+  padding: 24px 28px 32px;
+  min-width: 0;
+}
+
+.dashboard-root {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.content-header {
+  margin: 0 0 4px;
+}
+
+.content-header h2 {
+  margin: 0 0 6px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #121826;
+}
+
+.content-subtitle {
+  margin: 0;
+  font-size: 14px;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.login-card {
+  margin: 0 auto;
 }
 
 .card {
@@ -118,7 +276,7 @@ label {
 
 .session-panel {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .label {
@@ -258,11 +416,11 @@ tbody tr.active {
 }
 
 .broadcast-card {
-  margin-top: 20px;
+  margin-top: 0;
 }
 
 .release-card {
-  margin-top: 20px;
+  margin-top: 0;
 }
 
 .release-grid {
@@ -322,7 +480,39 @@ tbody tr.active {
   }
 
   .sidebar {
-    gap: 20px;
+    min-height: 0;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .sidebar-top {
+    padding-bottom: 12px;
+  }
+
+  .sidebar-bottom {
+    border-top: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 12px;
+  }
+
+  .sidebar-nav {
+    margin-top: 14px;
+  }
+
+  .nav-section {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .nav-section-title {
+    width: 100%;
+    padding-left: 0;
+  }
+
+  .nav-item {
+    flex: 1 1 calc(50% - 8px);
+    min-width: 140px;
   }
 
   .dashboard-grid {

@@ -1,7 +1,14 @@
+const PANEL_META = {
+  users: { title: "用户管理", subtitle: "搜索与处理用户账号、会话与审计" },
+  releases: { title: "安装包发布", subtitle: "上传 Android / PC 安装包并发布为当前最新版本" },
+  broadcast: { title: "系统广播", subtitle: "通过系统通知号向用户发送广播消息" },
+};
+
 const state = {
   token: localStorage.getItem("hsgram_admin_token") || "",
   admin: null,
   features: { broadcasts: false },
+  activePanel: "users",
   page: 1,
   pageSize: 20,
   query: "",
@@ -21,6 +28,12 @@ const state = {
 const elements = {
   loginView: document.getElementById("loginView"),
   dashboardView: document.getElementById("dashboardView"),
+  sidebarNav: document.getElementById("sidebarNav"),
+  contentTitle: document.getElementById("contentTitle"),
+  contentSubtitle: document.getElementById("contentSubtitle"),
+  panelUsers: document.getElementById("panelUsers"),
+  panelReleases: document.getElementById("panelReleases"),
+  panelBroadcast: document.getElementById("panelBroadcast"),
   sessionPanel: document.getElementById("sessionPanel"),
   adminName: document.getElementById("adminName"),
   loginForm: document.getElementById("loginForm"),
@@ -42,7 +55,6 @@ const elements = {
   kickSessionsButton: document.getElementById("kickSessionsButton"),
   sessionsList: document.getElementById("sessionsList"),
   auditLogsList: document.getElementById("auditLogsList"),
-  broadcastCard: document.querySelector(".broadcast-card"),
   broadcastDisabledNotice: document.getElementById("broadcastDisabledNotice"),
   broadcastTargetType: document.getElementById("broadcastTargetType"),
   broadcastIdentifiersWrap: document.getElementById("broadcastIdentifiersWrap"),
@@ -78,6 +90,15 @@ const elements = {
 
 elements.loginForm.addEventListener("submit", onLogin);
 elements.logoutButton.addEventListener("click", logout);
+
+document.querySelectorAll(".nav-item").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const panel = btn.getAttribute("data-panel");
+    if (panel) {
+      setActivePanel(panel);
+    }
+  });
+});
 elements.searchButton.addEventListener("click", runSearch);
 elements.prevPageButton.addEventListener("click", () => changePage(-1));
 elements.nextPageButton.addEventListener("click", () => changePage(1));
@@ -160,6 +181,7 @@ function logout() {
   state.token = "";
   state.admin = null;
   state.features = { broadcasts: false };
+  state.activePanel = "users";
   state.users = [];
   state.selectedUserId = null;
   state.releases = [];
@@ -174,12 +196,31 @@ function renderLoggedOut() {
   elements.loginView.classList.remove("hidden");
   elements.dashboardView.classList.add("hidden");
   elements.sessionPanel.classList.add("hidden");
+  elements.sidebarNav.classList.add("hidden");
+}
+
+function setActivePanel(panel) {
+  const id = panel === "releases" || panel === "broadcast" ? panel : "users";
+  state.activePanel = id;
+
+  document.querySelectorAll(".nav-item").forEach((btn) => {
+    btn.classList.toggle("active", btn.getAttribute("data-panel") === id);
+  });
+
+  elements.panelUsers.classList.toggle("hidden", id !== "users");
+  elements.panelReleases.classList.toggle("hidden", id !== "releases");
+  elements.panelBroadcast.classList.toggle("hidden", id !== "broadcast");
+
+  const meta = PANEL_META[id] || PANEL_META.users;
+  elements.contentTitle.textContent = meta.title;
+  elements.contentSubtitle.textContent = meta.subtitle;
 }
 
 function renderLoggedIn() {
   elements.loginView.classList.add("hidden");
   elements.dashboardView.classList.remove("hidden");
   elements.sessionPanel.classList.remove("hidden");
+  elements.sidebarNav.classList.remove("hidden");
   elements.adminName.textContent = `${state.admin.username} (${state.admin.role})`;
   if (state.features.broadcasts) {
     elements.broadcastDisabledNotice.classList.add("hidden");
@@ -205,6 +246,7 @@ function renderLoggedIn() {
   syncBroadcastTargetFields();
   syncReleaseBroadcastFields();
   renderUploadProgress();
+  setActivePanel(state.activePanel || "users");
 }
 
 async function loadUsers() {

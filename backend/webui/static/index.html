@@ -4,24 +4,56 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HSgram Admin</title>
-    <link rel="stylesheet" href="/styles.css?v=20260414-1" />
+    <link rel="stylesheet" href="/styles.css?v=20260414-2" />
   </head>
   <body>
     <div class="layout">
       <aside class="sidebar">
-        <div>
-          <h1>HSgram Admin</h1>
-          <p class="muted">用户管理后台 MVP</p>
+        <div class="sidebar-top">
+          <div class="sidebar-brand">
+            <h1>HSgram Admin</h1>
+            <p class="sidebar-tagline">管理后台</p>
+          </div>
+
+          <nav id="sidebarNav" class="sidebar-nav hidden" aria-label="功能导航">
+            <div class="nav-section">
+              <span class="nav-section-title">功能模块</span>
+              <button type="button" class="nav-item active" data-panel="users" id="navUsers">
+                <span class="nav-icon" aria-hidden="true">◎</span>
+                <span class="nav-body">
+                  <span class="nav-label">用户管理</span>
+                  <span class="nav-desc">搜索、封禁、会话与日志</span>
+                </span>
+              </button>
+              <button type="button" class="nav-item" data-panel="releases" id="navReleases">
+                <span class="nav-icon" aria-hidden="true">▣</span>
+                <span class="nav-body">
+                  <span class="nav-label">安装包发布</span>
+                  <span class="nav-desc">OTA 上传与版本发布</span>
+                </span>
+              </button>
+              <button type="button" class="nav-item" data-panel="broadcast" id="navBroadcast">
+                <span class="nav-icon" aria-hidden="true">✉</span>
+                <span class="nav-body">
+                  <span class="nav-label">系统广播</span>
+                  <span class="nav-desc">向用户推送通知消息</span>
+                </span>
+              </button>
+            </div>
+          </nav>
         </div>
-        <div id="sessionPanel" class="session-panel hidden">
-          <div class="label">当前管理员</div>
-          <div id="adminName" class="admin-name"></div>
-          <button id="logoutButton" class="secondary">退出登录</button>
+
+        <div class="sidebar-bottom">
+          <div id="sessionPanel" class="session-panel hidden">
+            <div class="label">当前管理员</div>
+            <div id="adminName" class="admin-name"></div>
+            <button id="logoutButton" class="secondary sidebar-logout">退出登录</button>
+          </div>
         </div>
       </aside>
 
       <main class="content">
-        <section id="loginView" class="card narrow">
+        <section id="loginView" class="card narrow login-card">
           <h2>管理员登录</h2>
           <form id="loginForm" class="stack">
             <label>
@@ -36,220 +68,231 @@
           </form>
         </section>
 
-        <section id="dashboardView" class="hidden">
-          <div class="toolbar card">
-            <div class="search-row">
-              <input id="searchInput" placeholder="按用户 ID / 用户名 / 手机号搜索" />
-              <select id="restrictedFilter">
-                <option value="">全部状态</option>
-                <option value="true">仅已封禁</option>
-                <option value="false">仅未封禁</option>
-              </select>
-              <button id="searchButton">搜索</button>
+        <div id="dashboardView" class="dashboard-root hidden">
+          <header class="content-header">
+            <h2 id="contentTitle">用户管理</h2>
+            <p id="contentSubtitle" class="content-subtitle muted">搜索与处理用户账号、会话与审计</p>
+          </header>
+
+          <div id="panelUsers" class="panel" data-panel="users">
+            <div class="toolbar card">
+              <div class="search-row">
+                <input id="searchInput" placeholder="按用户 ID / 用户名 / 手机号搜索" />
+                <select id="restrictedFilter">
+                  <option value="">全部状态</option>
+                  <option value="true">仅已封禁</option>
+                  <option value="false">仅未封禁</option>
+                </select>
+                <button id="searchButton">搜索</button>
+              </div>
+              <div id="statusText" class="muted"></div>
             </div>
-            <div id="statusText" class="muted"></div>
+
+            <div class="dashboard-grid">
+              <section class="card">
+                <div class="section-title">用户列表</div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>昵称</th>
+                        <th>用户名</th>
+                        <th>手机号</th>
+                        <th>状态</th>
+                      </tr>
+                    </thead>
+                    <tbody id="usersTableBody"></tbody>
+                  </table>
+                </div>
+                <div class="pager">
+                  <button id="prevPageButton" class="secondary">上一页</button>
+                  <span id="pageText">第 1 页</span>
+                  <button id="nextPageButton" class="secondary">下一页</button>
+                </div>
+              </section>
+
+              <section class="card detail-card">
+                <div class="section-title">用户详情</div>
+                <div id="detailEmpty" class="muted">从列表中选择一个用户查看详情。</div>
+                <div id="detailPanel" class="hidden stack">
+                  <div id="detailSummary" class="detail-summary"></div>
+
+                  <div class="action-row">
+                    <input id="banReasonInput" placeholder="封禁原因（可选）" />
+                    <button id="banButton" class="danger">封禁</button>
+                    <button id="unbanButton" class="secondary">解封</button>
+                    <button id="kickSessionsButton" class="secondary">踢下线</button>
+                  </div>
+
+                  <div>
+                    <h3>活跃会话</h3>
+                    <div id="sessionsList" class="list"></div>
+                  </div>
+
+                  <div>
+                    <h3>操作日志</h3>
+                    <div id="auditLogsList" class="list"></div>
+                  </div>
+                </div>
+              </section>
+            </div>
           </div>
 
-          <div class="dashboard-grid">
-            <section class="card">
-              <div class="section-title">用户列表</div>
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>昵称</th>
-                      <th>用户名</th>
-                      <th>手机号</th>
-                      <th>状态</th>
-                    </tr>
-                  </thead>
-                  <tbody id="usersTableBody"></tbody>
-                </table>
-              </div>
-              <div class="pager">
-                <button id="prevPageButton" class="secondary">上一页</button>
-                <span id="pageText">第 1 页</span>
-                <button id="nextPageButton" class="secondary">下一页</button>
-              </div>
-            </section>
+          <div id="panelReleases" class="panel hidden" data-panel="releases">
+            <section class="card release-card">
+              <div class="section-title">安装包发布</div>
+              <div class="muted">上传 Android / PC 安装包，发布为最新版本，并可选广播通知用户。</div>
 
-            <section class="card detail-card">
-              <div class="section-title">用户详情</div>
-              <div id="detailEmpty" class="muted">从左侧选择一个用户查看详情。</div>
-              <div id="detailPanel" class="hidden stack">
-                <div id="detailSummary" class="detail-summary"></div>
-
-                <div class="action-row">
-                  <input id="banReasonInput" placeholder="封禁原因（可选）" />
-                  <button id="banButton" class="danger">封禁</button>
-                  <button id="unbanButton" class="secondary">解封</button>
-                  <button id="kickSessionsButton" class="secondary">踢下线</button>
-                </div>
-
-                <div>
-                  <h3>活跃会话</h3>
-                  <div id="sessionsList" class="list"></div>
-                </div>
-
-                <div>
-                  <h3>操作日志</h3>
-                  <div id="auditLogsList" class="list"></div>
-                </div>
-              </div>
-            </section>
-          </div>
-
-          <section class="card release-card">
-            <div class="section-title">安装包发布</div>
-            <div class="muted">上传 Android / PC 安装包，发布为最新版本，并可选广播通知用户。</div>
-
-            <div class="release-grid">
-              <div class="stack">
-                <label>
-                  平台
-                  <select id="releasePlatform">
-                    <option value="android">Android</option>
-                    <option value="pc">PC</option>
-                  </select>
-                </label>
-
-                <div class="filter-grid">
+              <div class="release-grid">
+                <div class="stack">
                   <label>
-                    版本号
-                    <input id="releaseVersion" placeholder="例如 1.2.4" />
+                    平台
+                    <select id="releasePlatform">
+                      <option value="android">Android</option>
+                      <option value="pc">PC</option>
+                    </select>
+                  </label>
+
+                  <div class="filter-grid">
+                    <label>
+                      版本号
+                      <input id="releaseVersion" placeholder="例如 1.2.4" />
+                    </label>
+                    <label>
+                      版本编码
+                      <input id="releaseVersionCode" type="number" min="1" placeholder="例如 124" />
+                    </label>
+                  </div>
+
+                  <label>
+                    更新说明
+                    <textarea id="releaseChangelog" rows="6" placeholder="填写版本更新说明"></textarea>
+                  </label>
+
+                  <label>
+                    安装包文件
+                    <input id="releaseFile" type="file" />
+                  </label>
+
+                  <div class="action-row compact">
+                    <button id="releaseUploadButton">上传安装包</button>
+                  </div>
+
+                  <div id="releaseUploadStatus" class="muted"></div>
+                  <div class="progress-wrap">
+                    <div class="progress-track">
+                      <div id="releaseUploadProgressBar" class="progress-bar"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="stack">
+                  <div class="section-title minor">发布历史</div>
+                  <div id="releaseHistoryList" class="list"></div>
+                  <div class="section-title minor">发布详情</div>
+                  <div id="releaseDetailList" class="list"></div>
+
+                  <label>
+                    <input id="releaseNotifyUsers" type="checkbox" />
+                    发布后广播通知全体用户
                   </label>
                   <label>
-                    版本编码
-                    <input id="releaseVersionCode" type="number" min="1" placeholder="例如 124" />
+                    广播内容
+                    <textarea id="releasePublishMessage" rows="5" placeholder="留空则自动生成更新通知"></textarea>
                   </label>
-                </div>
-
-                <label>
-                  更新说明
-                  <textarea id="releaseChangelog" rows="6" placeholder="填写版本更新说明"></textarea>
-                </label>
-
-                <label>
-                  安装包文件
-                  <input id="releaseFile" type="file" />
-                </label>
-
-                <div class="action-row compact">
-                  <button id="releaseUploadButton">上传安装包</button>
-                </div>
-
-                <div id="releaseUploadStatus" class="muted"></div>
-                <div class="progress-wrap">
-                  <div class="progress-track">
-                    <div id="releaseUploadProgressBar" class="progress-bar"></div>
+                  <div id="releaseBroadcastNotice" class="muted"></div>
+                  <div class="action-row compact">
+                    <button id="releasePublishButton" class="secondary">发布为最新版本</button>
                   </div>
                 </div>
               </div>
+            </section>
+          </div>
 
-              <div class="stack">
-                <div class="section-title minor">发布历史</div>
-                <div id="releaseHistoryList" class="list"></div>
-                <div class="section-title minor">发布详情</div>
-                <div id="releaseDetailList" class="list"></div>
-
-                <label>
-                  <input id="releaseNotifyUsers" type="checkbox" />
-                  发布后广播通知全体用户
-                </label>
-                <label>
-                  广播内容
-                  <textarea id="releasePublishMessage" rows="5" placeholder="留空则自动生成更新通知"></textarea>
-                </label>
-                <div id="releaseBroadcastNotice" class="muted"></div>
-                <div class="action-row compact">
-                  <button id="releasePublishButton" class="secondary">发布为最新版本</button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section class="card broadcast-card">
-            <div class="section-title">系统广播</div>
-            <div class="muted">通过系统账号 `HSgram Notice` 发送普通私聊消息。</div>
-            <div id="broadcastDisabledNotice" class="notice hidden">
-              当前部署未开启广播能力。只使用用户管理时，建议保持关闭以减少对消息链路的依赖。
-            </div>
-
-            <div class="broadcast-grid">
-              <div class="stack">
-                <label>
-                  广播范围
-                  <select id="broadcastTargetType">
-                    <option value="all">全体用户</option>
-                    <option value="selected">指定用户</option>
-                    <option value="filtered">按条件筛选</option>
-                  </select>
-                </label>
-
-                <label id="broadcastIdentifiersWrap" class="hidden">
-                  指定用户
-                  <textarea id="broadcastIdentifiers" rows="5" placeholder="支持用户ID / 用户名 / 手机号，换行或逗号分隔"></textarea>
-                </label>
-
-                <div id="broadcastFiltersWrap" class="hidden filter-grid">
-                  <label>
-                    封禁状态
-                    <select id="broadcastFilterRestricted">
-                      <option value="">全部</option>
-                      <option value="true">仅已封禁</option>
-                      <option value="false">仅未封禁</option>
-                    </select>
-                  </label>
-                  <label>
-                    删除状态
-                    <select id="broadcastFilterDeleted">
-                      <option value="">全部</option>
-                      <option value="true">仅已删除</option>
-                      <option value="false">仅未删除</option>
-                    </select>
-                  </label>
-                  <label>
-                    Bot 状态
-                    <select id="broadcastFilterIsBot">
-                      <option value="">全部</option>
-                      <option value="true">仅 Bot</option>
-                      <option value="false">仅普通用户</option>
-                    </select>
-                  </label>
-                  <label>
-                    国家码
-                    <input id="broadcastFilterCountryCode" placeholder="例如 CN / US" />
-                  </label>
-                </div>
-
-                <label>
-                  广播内容
-                  <textarea id="broadcastMessage" rows="6" placeholder="输入要推送的广播文本"></textarea>
-                </label>
-
-                <div class="action-row compact">
-                  <button id="broadcastPreviewButton" class="secondary">预估人数</button>
-                  <button id="broadcastSendButton">提交广播</button>
-                </div>
-
-                <div id="broadcastPreviewResult" class="muted"></div>
-                <div id="broadcastPreviewUsers" class="list"></div>
+          <div id="panelBroadcast" class="panel hidden" data-panel="broadcast">
+            <section class="card broadcast-card">
+              <div class="section-title">系统广播</div>
+              <div class="muted">通过系统账号 `HSgram Notice` 发送普通私聊消息。</div>
+              <div id="broadcastDisabledNotice" class="notice hidden">
+                当前部署未开启广播能力。只使用用户管理时，建议保持关闭以减少对消息链路的依赖。
               </div>
 
-              <div class="stack">
-                <div class="section-title minor">广播历史</div>
-                <div id="broadcastHistoryList" class="list"></div>
-                <div class="section-title minor">投递详情</div>
-                <div id="broadcastDetailList" class="list"></div>
+              <div class="broadcast-grid">
+                <div class="stack">
+                  <label>
+                    广播范围
+                    <select id="broadcastTargetType">
+                      <option value="all">全体用户</option>
+                      <option value="selected">指定用户</option>
+                      <option value="filtered">按条件筛选</option>
+                    </select>
+                  </label>
+
+                  <label id="broadcastIdentifiersWrap" class="hidden">
+                    指定用户
+                    <textarea id="broadcastIdentifiers" rows="5" placeholder="支持用户ID / 用户名 / 手机号，换行或逗号分隔"></textarea>
+                  </label>
+
+                  <div id="broadcastFiltersWrap" class="hidden filter-grid">
+                    <label>
+                      封禁状态
+                      <select id="broadcastFilterRestricted">
+                        <option value="">全部</option>
+                        <option value="true">仅已封禁</option>
+                        <option value="false">仅未封禁</option>
+                      </select>
+                    </label>
+                    <label>
+                      删除状态
+                      <select id="broadcastFilterDeleted">
+                        <option value="">全部</option>
+                        <option value="true">仅已删除</option>
+                        <option value="false">仅未删除</option>
+                      </select>
+                    </label>
+                    <label>
+                      Bot 状态
+                      <select id="broadcastFilterIsBot">
+                        <option value="">全部</option>
+                        <option value="true">仅 Bot</option>
+                        <option value="false">仅普通用户</option>
+                      </select>
+                    </label>
+                    <label>
+                      国家码
+                      <input id="broadcastFilterCountryCode" placeholder="例如 CN / US" />
+                    </label>
+                  </div>
+
+                  <label>
+                    广播内容
+                    <textarea id="broadcastMessage" rows="6" placeholder="输入要推送的广播文本"></textarea>
+                  </label>
+
+                  <div class="action-row compact">
+                    <button id="broadcastPreviewButton" class="secondary">预估人数</button>
+                    <button id="broadcastSendButton">提交广播</button>
+                  </div>
+
+                  <div id="broadcastPreviewResult" class="muted"></div>
+                  <div id="broadcastPreviewUsers" class="list"></div>
+                </div>
+
+                <div class="stack">
+                  <div class="section-title minor">广播历史</div>
+                  <div id="broadcastHistoryList" class="list"></div>
+                  <div class="section-title minor">投递详情</div>
+                  <div id="broadcastDetailList" class="list"></div>
+                </div>
               </div>
-            </div>
-          </section>
-        </section>
+            </section>
+          </div>
+        </div>
       </main>
     </div>
 
     <div id="toast" class="toast hidden"></div>
-    <script src="/app.js?v=20260414-1" defer></script>
+    <script src="/app.js?v=20260414-2" defer></script>
   </body>
 </html>
