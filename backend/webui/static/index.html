@@ -25,6 +25,13 @@
                   <span class="nav-desc">搜索、封禁、会话与日志</span>
                 </span>
               </button>
+              <button type="button" class="nav-item" data-panel="risk" id="navRisk">
+                <span class="nav-icon" aria-hidden="true">*</span>
+                <span class="nav-body">
+                  <span class="nav-label">风控策略</span>
+                  <span class="nav-desc">踢下线时长与注册 IP 限额</span>
+                </span>
+              </button>
               <button type="button" class="nav-item" data-panel="releases" id="navReleases">
                 <span class="nav-icon" aria-hidden="true">▣</span>
                 <span class="nav-body">
@@ -141,31 +148,31 @@
 
           <div id="panelRisk" class="panel hidden" data-panel="risk">
             <section class="card release-card">
-              <div class="section-title">????</div>
-              <div class="muted">??????????????????? IP ???????</div>
+              <div class="section-title">风控策略</div>
+              <div class="muted">统一配置踢下线后的禁止登录时长，以及单 IP 每日注册上限。</div>
 
               <div class="release-grid">
                 <div class="stack">
                   <label>
-                    ???????????
+                    踢下线后禁止登录分钟数
                     <input id="riskKickMinutesInput" type="number" min="1" step="1" />
                   </label>
 
                   <label>
-                    ? IP ?????????
+                    单 IP 每日最大注册账号数
                     <input id="riskSignupLimitInput" type="number" min="1" step="1" />
                   </label>
 
                   <div class="action-row compact">
-                    <button id="riskSaveButton">????</button>
-                    <button id="riskRefreshButton" class="secondary">????</button>
+                    <button id="riskSaveButton">保存配置</button>
+                    <button id="riskRefreshButton" class="secondary">刷新数据</button>
                   </div>
 
                   <div id="riskStatusText" class="muted"></div>
                 </div>
 
                 <div class="stack">
-                  <div class="section-title minor">???? IP ??</div>
+                  <div class="section-title minor">今日注册 IP 统计</div>
                   <div id="riskStatsList" class="list"></div>
                 </div>
               </div>

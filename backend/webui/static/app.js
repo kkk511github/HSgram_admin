@@ -1,5 +1,6 @@
 const PANEL_META = {
   users: { title: "用户管理", subtitle: "搜索与处理用户账号、会话与审计" },
+  risk: { title: "风控策略", subtitle: "配置踢下线后的登录限制，以及同 IP 注册上限" },
   releases: { title: "安装包发布", subtitle: "上传 Android / PC 安装包并发布为当前最新版本" },
   broadcast: { title: "系统广播", subtitle: "通过系统通知号向用户发送广播消息" },
 };
@@ -826,9 +827,9 @@ async function loadSignupIpStats() {
 async function refreshRiskPanel() {
   try {
     await Promise.all([loadRiskSettings(), loadSignupIpStats()]);
-    elements.riskStatusText.textContent = "??????????";
+    elements.riskStatusText.textContent = "风控配置和统计已刷新";
   } catch (error) {
-    elements.riskStatusText.textContent = error.message || "????????";
+    elements.riskStatusText.textContent = error.message || "风控数据加载失败";
     throw error;
   }
 }
@@ -840,7 +841,7 @@ function renderRiskPanel() {
   elements.riskStatsList.innerHTML = "";
 
   if (!state.signupIpStats.length) {
-    elements.riskStatsList.innerHTML = `<div class="muted">???????? IP ??</div>`;
+    elements.riskStatsList.innerHTML = `<div class="muted">今天暂时没有注册 IP 记录</div>`;
     return;
   }
 
@@ -849,7 +850,7 @@ function renderRiskPanel() {
     row.className = "list-item";
     row.innerHTML = `
       <div class="list-item-title">${escapeHTML(item.ip)}</div>
-      <div>?????: ${item.count}</div>
+      <div>今日注册数: ${item.count}</div>
     `;
     elements.riskStatsList.appendChild(row);
   });
@@ -859,11 +860,11 @@ async function saveRiskSettings() {
   const kickMinutes = Number(elements.riskKickMinutesInput.value || 0);
   const signupLimit = Number(elements.riskSignupLimitInput.value || 0);
   if (!Number.isFinite(kickMinutes) || kickMinutes < 1) {
-    toast("???????????? 1");
+    toast("踢下线限制分钟数不能小于 1");
     return;
   }
   if (!Number.isFinite(signupLimit) || signupLimit < 1) {
-    toast("? IP ???????? 1");
+    toast("单 IP 注册上限不能小于 1");
     return;
   }
 
@@ -877,10 +878,10 @@ async function saveRiskSettings() {
     });
     state.riskSettings = response.data;
     renderRiskPanel();
-    elements.riskStatusText.textContent = "???????";
-    toast("???????");
+    elements.riskStatusText.textContent = "风控配置已保存";
+    toast("风控配置已保存");
   } catch (error) {
-    toast(error.message || "????????");
+    toast(error.message || "保存风控配置失败");
   }
 }
 
