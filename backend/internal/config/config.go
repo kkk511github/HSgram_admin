@@ -14,6 +14,8 @@ type Config struct {
 	MsgRPCAddr         string
 	AuthsessionRPCAddr string
 	SyncRPCAddr        string
+	StatusRPCAddr      string
+	GatewayRPCAddr     string
 	RedisAddr          string
 	RedisPass          string
 	ReleasesDir        string
@@ -49,6 +51,8 @@ func Load() (Config, error) {
 		MsgRPCAddr:         strings.TrimSpace(os.Getenv("ADMIN_MSG_RPC_ADDR")),
 		AuthsessionRPCAddr: strings.TrimSpace(os.Getenv("ADMIN_AUTHSESSION_RPC_ADDR")),
 		SyncRPCAddr:        strings.TrimSpace(getEnv("ADMIN_SYNC_RPC_ADDR", "hsgram_server-teamgram-1:20420")),
+		StatusRPCAddr:      strings.TrimSpace(getEnv("ADMIN_STATUS_RPC_ADDR", "hsgram_server-teamgram-1:20670")),
+		GatewayRPCAddr:     strings.TrimSpace(getEnv("ADMIN_GATEWAY_RPC_ADDR", "hsgram_server-teamgram-1:20110")),
 		RedisAddr:          strings.TrimSpace(getEnv("ADMIN_REDIS_ADDR", "redis:6379")),
 		RedisPass:          os.Getenv("ADMIN_REDIS_PASS"),
 		ReleasesDir:        strings.TrimSpace(getEnv("ADMIN_RELEASES_DIR", "./releases")),

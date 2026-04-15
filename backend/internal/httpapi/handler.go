@@ -16,7 +16,9 @@ import (
 	"hsgram-admin/backend/internal/auth"
 	"hsgram-admin/backend/internal/authsessionrpc"
 	"hsgram-admin/backend/internal/broadcast"
+	"hsgram-admin/backend/internal/gatewayrpc"
 	"hsgram-admin/backend/internal/risk"
+	"hsgram-admin/backend/internal/statusrpc"
 	"hsgram-admin/backend/internal/store"
 	"hsgram-admin/backend/internal/syncrpc"
 	"hsgram-admin/backend/webui"
@@ -28,6 +30,8 @@ type Handler struct {
 	broadcasts   *broadcast.Service
 	authsessions *authsessionrpc.Client
 	sync         *syncrpc.Client
+	status       *statusrpc.Client
+	gateway      *gatewayrpc.Client
 	risk         *risk.Service
 	updates      UpdateConfig
 	web          http.Handler
@@ -45,13 +49,15 @@ type featureFlags struct {
 	Broadcasts bool `json:"broadcasts"`
 }
 
-func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Service, authsessions *authsessionrpc.Client, syncClient *syncrpc.Client, riskService *risk.Service, updates UpdateConfig) http.Handler {
+func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Service, authsessions *authsessionrpc.Client, syncClient *syncrpc.Client, statusClient *statusrpc.Client, gatewayClient *gatewayrpc.Client, riskService *risk.Service, updates UpdateConfig) http.Handler {
 	handler := &Handler{
 		tokens:       tokens,
 		store:        userStore,
 		broadcasts:   broadcasts,
 		authsessions: authsessions,
 		sync:         syncClient,
+		status:       statusClient,
+		gateway:      gatewayClient,
 		risk:         riskService,
 		updates:      updates,
 		web:          webui.NewHandler(),
@@ -244,6 +250,36 @@ func (h *Handler) handleUserDetail(w http.ResponseWriter, r *http.Request, admin
 	})
 }
 
+func mergeAuthKeyIDs(groups ...[]int64) []int64 {
+	seen := make(map[int64]struct{})
+	merged := make([]int64, 0)
+	for _, group := range groups {
+		for _, keyID := range group {
+			if keyID == 0 {
+				continue
+			}
+			if _, ok := seen[keyID]; ok {
+				continue
+			}
+			seen[keyID] = struct{}{}
+			merged = append(merged, keyID)
+		}
+	}
+	return merged
+}
+
+func (h *Handler) onlineAuthKeyIDs(ctx context.Context, userID int64) []int64 {
+	if h.status == nil {
+		return nil
+	}
+	ids, err := h.status.GetOnlineAuthKeys(ctx, userID)
+	if err != nil {
+		log.Printf("admin-api: load online sessions for %d failed: %v", userID, err)
+		return nil
+	}
+	return mergeAuthKeyIDs(ids)
+}
+
 func (h *Handler) revokeUserSessions(ctx context.Context, userID int64) ([]int64, error) {
 	if h.authsessions != nil {
 		return h.authsessions.ResetAllAuthorizations(ctx, userID)
@@ -253,6 +289,15 @@ func (h *Handler) revokeUserSessions(ctx context.Context, userID int64) ([]int64
 		return nil, err
 	}
 	return nil, nil
+}
+
+func (h *Handler) forceDisconnectAuthKeys(ctx context.Context, keyIDs []int64) {
+	if h.gateway == nil || len(keyIDs) == 0 {
+		return
+	}
+	if err := h.gateway.ForceDisconnectAuthKeys(ctx, keyIDs); err != nil {
+		log.Printf("admin-api: force disconnect auth keys %v failed: %v", keyIDs, err)
+	}
 }
 
 func (h *Handler) pushAdminPopup(ctx context.Context, userID int64, message string) {
@@ -308,13 +353,19 @@ func (h *Handler) handleBan(w http.ResponseWriter, r *http.Request, admin store.
 		return
 	}
 
-	h.pushAdminPopup(r.Context(), userID, "??????")
-	keyIDs, err := h.revokeUserSessions(r.Context(), userID)
+	onlineKeyIDs := h.onlineAuthKeyIDs(r.Context(), userID)
+	h.pushAdminPopup(r.Context(), userID, "该账号已被封禁")
+	resetKeyIDs, err := h.revokeUserSessions(r.Context(), userID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "ban user failed")
 		return
 	}
+	keyIDs := mergeAuthKeyIDs(onlineKeyIDs, resetKeyIDs)
 	h.pushResetAuthorization(r.Context(), userID, keyIDs)
+	if len(keyIDs) > 0 {
+		time.Sleep(350 * time.Millisecond)
+		h.forceDisconnectAuthKeys(r.Context(), keyIDs)
+	}
 
 	_ = h.store.CreateAuditLog(r.Context(), admin, "user.ban", userID, map[string]any{
 		"reason":        request.Reason,
@@ -322,7 +373,7 @@ func (h *Handler) handleBan(w http.ResponseWriter, r *http.Request, admin store.
 		"forced_logout": true,
 	})
 
-	writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: map[string]any{"affected": len(keyIDs), "message": "????????????"}})
+	writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: map[string]any{"affected": len(keyIDs), "message": "该账号已被封禁并强制下线"}})
 }
 
 func (h *Handler) handleUnban(w http.ResponseWriter, r *http.Request, admin store.AdminUser, userID int64) {
@@ -359,13 +410,19 @@ func (h *Handler) handleKickSessions(w http.ResponseWriter, r *http.Request, adm
 	if h.risk != nil {
 		_ = h.risk.SetKickLoginBlock(r.Context(), userID, time.Duration(settings.KickLoginBlockSeconds)*time.Second)
 	}
-	h.pushAdminPopup(r.Context(), userID, "?????????")
-	keyIDs, err := h.revokeUserSessions(r.Context(), userID)
+	onlineKeyIDs := h.onlineAuthKeyIDs(r.Context(), userID)
+	h.pushAdminPopup(r.Context(), userID, "您已被管理员踢下线")
+	resetKeyIDs, err := h.revokeUserSessions(r.Context(), userID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "kick sessions failed")
 		return
 	}
+	keyIDs := mergeAuthKeyIDs(onlineKeyIDs, resetKeyIDs)
 	h.pushResetAuthorization(r.Context(), userID, keyIDs)
+	if len(keyIDs) > 0 {
+		time.Sleep(350 * time.Millisecond)
+		h.forceDisconnectAuthKeys(r.Context(), keyIDs)
+	}
 
 	_ = h.store.CreateAuditLog(r.Context(), admin, "user.kick_sessions", userID, map[string]any{
 		"affected":            len(keyIDs),
@@ -377,7 +434,7 @@ func (h *Handler) handleKickSessions(w http.ResponseWriter, r *http.Request, adm
 		Data: map[string]any{
 			"affected":          len(keyIDs),
 			"loginBlockSeconds": settings.KickLoginBlockSeconds,
-			"message":           "?????????????????",
+			"message":           "您已被管理员踢下线，五分钟内限制登录",
 		},
 	})
 }

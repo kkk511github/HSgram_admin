@@ -11,9 +11,11 @@ import (
 	"hsgram-admin/backend/internal/authsessionrpc"
 	"hsgram-admin/backend/internal/broadcast"
 	"hsgram-admin/backend/internal/config"
+	"hsgram-admin/backend/internal/gatewayrpc"
 	"hsgram-admin/backend/internal/httpapi"
 	"hsgram-admin/backend/internal/messenger"
 	"hsgram-admin/backend/internal/risk"
+	"hsgram-admin/backend/internal/statusrpc"
 	"hsgram-admin/backend/internal/store"
 	"hsgram-admin/backend/internal/syncrpc"
 
@@ -29,6 +31,8 @@ type App struct {
 	msgClient         *messenger.Client
 	authsessionClient *authsessionrpc.Client
 	syncClient        *syncrpc.Client
+	statusClient      *statusrpc.Client
+	gatewayClient     *gatewayrpc.Client
 	broadcaster       *broadcast.Service
 	riskService       *risk.Service
 	handler           http.Handler
@@ -59,6 +63,8 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	var msgClient *messenger.Client
 	var authsessionClient *authsessionrpc.Client
 	var syncClient *syncrpc.Client
+	var statusClient *statusrpc.Client
+	var gatewayClient *gatewayrpc.Client
 	var broadcaster *broadcast.Service
 	if cfg.EnableBroadcasts {
 		if err := userStore.EnsureBroadcastSchema(ctx); err != nil {
@@ -111,7 +117,48 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		log.Printf("admin-api: ADMIN_SYNC_RPC_ADDR is empty; online forced logout popup will be disabled")
 	}
 
-	handler := httpapi.New(tokenMgr, userStore, broadcaster, authsessionClient, syncClient, riskService, httpapi.UpdateConfig{
+	if cfg.StatusRPCAddr != "" {
+		statusClient, err = statusrpc.New(cfg.StatusRPCAddr)
+		if err != nil {
+			if syncClient != nil {
+				_ = syncClient.Close()
+			}
+			if authsessionClient != nil {
+				_ = authsessionClient.Close()
+			}
+			if msgClient != nil {
+				_ = msgClient.Close()
+			}
+			_ = userStore.Close()
+			return nil, err
+		}
+	} else {
+		log.Printf("admin-api: ADMIN_STATUS_RPC_ADDR is empty; online session lookup will be disabled")
+	}
+
+	if cfg.GatewayRPCAddr != "" {
+		gatewayClient, err = gatewayrpc.New(cfg.GatewayRPCAddr)
+		if err != nil {
+			if statusClient != nil {
+				_ = statusClient.Close()
+			}
+			if syncClient != nil {
+				_ = syncClient.Close()
+			}
+			if authsessionClient != nil {
+				_ = authsessionClient.Close()
+			}
+			if msgClient != nil {
+				_ = msgClient.Close()
+			}
+			_ = userStore.Close()
+			return nil, err
+		}
+	} else {
+		log.Printf("admin-api: ADMIN_GATEWAY_RPC_ADDR is empty; online socket disconnect will be disabled")
+	}
+
+	handler := httpapi.New(tokenMgr, userStore, broadcaster, authsessionClient, syncClient, statusClient, gatewayClient, riskService, httpapi.UpdateConfig{
 		ReleasesDir:   cfg.ReleasesDir,
 		PublicBaseURL: cfg.PublicBaseURL,
 	})
@@ -123,6 +170,8 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		msgClient:         msgClient,
 		authsessionClient: authsessionClient,
 		syncClient:        syncClient,
+		statusClient:      statusClient,
+		gatewayClient:     gatewayClient,
 		broadcaster:       broadcaster,
 		riskService:       riskService,
 		handler:           handler,
@@ -185,6 +234,18 @@ func (a *App) Close() error {
 	}
 	if a.syncClient != nil {
 		if err := a.syncClient.Close(); err != nil {
+			_ = a.store.Close()
+			return err
+		}
+	}
+	if a.statusClient != nil {
+		if err := a.statusClient.Close(); err != nil {
+			_ = a.store.Close()
+			return err
+		}
+	}
+	if a.gatewayClient != nil {
+		if err := a.gatewayClient.Close(); err != nil {
 			_ = a.store.Close()
 			return err
 		}
