@@ -6,15 +6,19 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/teamgram/teamgram-server/pkg/riskctrl"
 	"hsgram-admin/backend/internal/auth"
 	"hsgram-admin/backend/internal/authsessionrpc"
 	"hsgram-admin/backend/internal/broadcast"
+	"hsgram-admin/backend/internal/risk"
 	"hsgram-admin/backend/internal/store"
+	"hsgram-admin/backend/internal/syncrpc"
 	"hsgram-admin/backend/webui"
 )
 
@@ -23,6 +27,8 @@ type Handler struct {
 	store        *store.Store
 	broadcasts   *broadcast.Service
 	authsessions *authsessionrpc.Client
+	sync         *syncrpc.Client
+	risk         *risk.Service
 	updates      UpdateConfig
 	web          http.Handler
 	releases     http.Handler
@@ -39,12 +45,14 @@ type featureFlags struct {
 	Broadcasts bool `json:"broadcasts"`
 }
 
-func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Service, authsessions *authsessionrpc.Client, updates UpdateConfig) http.Handler {
+func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Service, authsessions *authsessionrpc.Client, syncClient *syncrpc.Client, riskService *risk.Service, updates UpdateConfig) http.Handler {
 	handler := &Handler{
 		tokens:       tokens,
 		store:        userStore,
 		broadcasts:   broadcasts,
 		authsessions: authsessions,
+		sync:         syncClient,
+		risk:         riskService,
 		updates:      updates,
 		web:          webui.NewHandler(),
 		releases:     http.StripPrefix("/releases/", http.FileServer(http.Dir(updates.ReleasesDir))),
@@ -62,6 +70,8 @@ func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Ser
 	mux.Handle("/api/admin/releases/", handler.requireSuperAdmin(handler.handleReleaseRoutes))
 	mux.Handle("/api/admin/users", handler.requireAuth(handler.handleUsers))
 	mux.Handle("/api/admin/users/", handler.requireAuth(handler.handleUserRoutes))
+	mux.Handle("/api/admin/risk/settings", handler.requireSuperAdmin(handler.handleRiskSettings))
+	mux.Handle("/api/admin/risk/signup-ip-stats", handler.requireSuperAdmin(handler.handleRiskSignupIPStats))
 	mux.Handle("/api/admin/broadcasts/preview", handler.requireSuperAdmin(handler.handleBroadcastPreview))
 	mux.Handle("/api/admin/broadcasts", handler.requireSuperAdmin(handler.handleBroadcastRoutes))
 	mux.Handle("/api/admin/broadcasts/", handler.requireSuperAdmin(handler.handleBroadcastRoutes))
@@ -234,16 +244,45 @@ func (h *Handler) handleUserDetail(w http.ResponseWriter, r *http.Request, admin
 	})
 }
 
-func (h *Handler) revokeUserSessions(ctx context.Context, userID int64) (int64, error) {
+func (h *Handler) revokeUserSessions(ctx context.Context, userID int64) ([]int64, error) {
 	if h.authsessions != nil {
-		keyIDs, err := h.authsessions.ResetAllAuthorizations(ctx, userID)
-		if err != nil {
-			return 0, err
-		}
-		return int64(len(keyIDs)), nil
+		return h.authsessions.ResetAllAuthorizations(ctx, userID)
 	}
 
-	return h.store.KickUserSessions(ctx, userID)
+	if _, err := h.store.KickUserSessions(ctx, userID); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+func (h *Handler) pushAdminPopup(ctx context.Context, userID int64, message string) {
+	if h.sync == nil || strings.TrimSpace(message) == "" {
+		return
+	}
+	if err := h.sync.PushUserPopup(ctx, userID, message); err != nil {
+		log.Printf("admin-api: push popup to %d failed: %v", userID, err)
+	}
+}
+
+func (h *Handler) pushResetAuthorization(ctx context.Context, userID int64, keyIDs []int64) {
+	if h.sync == nil || len(keyIDs) == 0 {
+		return
+	}
+	if err := h.sync.PushResetAuthorization(ctx, userID, keyIDs); err != nil {
+		log.Printf("admin-api: push reset authorization to %d failed: %v", userID, err)
+	}
+}
+
+func (h *Handler) currentRiskSettings(ctx context.Context) riskctrl.Settings {
+	if h.risk == nil {
+		return riskctrl.DefaultSettings()
+	}
+	settings, err := h.risk.GetSettings(ctx)
+	if err != nil {
+		log.Printf("admin-api: load risk settings failed: %v", err)
+		return riskctrl.DefaultSettings()
+	}
+	return settings
 }
 
 func (h *Handler) handleBan(w http.ResponseWriter, r *http.Request, admin store.AdminUser, userID int64) {
@@ -269,18 +308,21 @@ func (h *Handler) handleBan(w http.ResponseWriter, r *http.Request, admin store.
 		return
 	}
 
-	affected, err := h.revokeUserSessions(r.Context(), userID)
+	h.pushAdminPopup(r.Context(), userID, "??????")
+	keyIDs, err := h.revokeUserSessions(r.Context(), userID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "ban user failed")
 		return
 	}
+	h.pushResetAuthorization(r.Context(), userID, keyIDs)
 
 	_ = h.store.CreateAuditLog(r.Context(), admin, "user.ban", userID, map[string]any{
-		"reason":   request.Reason,
-		"affected": affected,
+		"reason":        request.Reason,
+		"affected":      len(keyIDs),
+		"forced_logout": true,
 	})
 
-	writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: map[string]any{"affected": affected}})
+	writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: map[string]any{"affected": len(keyIDs), "message": "????????????"}})
 }
 
 func (h *Handler) handleUnban(w http.ResponseWriter, r *http.Request, admin store.AdminUser, userID int64) {
@@ -298,9 +340,13 @@ func (h *Handler) handleUnban(w http.ResponseWriter, r *http.Request, admin stor
 		return
 	}
 
+	if h.risk != nil {
+		_ = h.risk.ClearKickLoginBlock(r.Context(), userID)
+	}
+
 	_ = h.store.CreateAuditLog(r.Context(), admin, "user.unban", userID, nil)
 
-	writeJSON(w, http.StatusOK, apiResponse{OK: true})
+	writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: map[string]any{"message": "?????"}})
 }
 
 func (h *Handler) handleKickSessions(w http.ResponseWriter, r *http.Request, admin store.AdminUser, userID int64) {
@@ -309,22 +355,89 @@ func (h *Handler) handleKickSessions(w http.ResponseWriter, r *http.Request, adm
 		return
 	}
 
-	affected, err := h.revokeUserSessions(r.Context(), userID)
+	settings := h.currentRiskSettings(r.Context())
+	if h.risk != nil {
+		_ = h.risk.SetKickLoginBlock(r.Context(), userID, time.Duration(settings.KickLoginBlockSeconds)*time.Second)
+	}
+	h.pushAdminPopup(r.Context(), userID, "?????????")
+	keyIDs, err := h.revokeUserSessions(r.Context(), userID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "kick sessions failed")
 		return
 	}
+	h.pushResetAuthorization(r.Context(), userID, keyIDs)
 
 	_ = h.store.CreateAuditLog(r.Context(), admin, "user.kick_sessions", userID, map[string]any{
-		"affected": affected,
+		"affected":            len(keyIDs),
+		"login_block_seconds": settings.KickLoginBlockSeconds,
 	})
 
 	writeJSON(w, http.StatusOK, apiResponse{
 		OK: true,
 		Data: map[string]any{
-			"affected": affected,
+			"affected":          len(keyIDs),
+			"loginBlockSeconds": settings.KickLoginBlockSeconds,
+			"message":           "?????????????????",
 		},
 	})
+}
+
+func (h *Handler) handleRiskSettings(w http.ResponseWriter, r *http.Request, admin store.AdminUser) {
+	if h.risk == nil {
+		writeError(w, http.StatusServiceUnavailable, "risk control is not configured")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		settings, err := h.risk.GetSettings(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "load risk settings failed")
+			return
+		}
+		writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: settings})
+	case http.MethodPost:
+		var request riskctrl.Settings
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid json body")
+			return
+		}
+		settings, err := h.risk.UpdateSettings(r.Context(), request)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "save risk settings failed")
+			return
+		}
+		_ = h.store.CreateAuditLog(r.Context(), admin, "risk.settings.update", 0, map[string]any{
+			"kick_login_block_seconds": settings.KickLoginBlockSeconds,
+			"signup_ip_daily_limit":    settings.SignupIPDailyLimit,
+		})
+		writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: settings})
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func (h *Handler) handleRiskSignupIPStats(w http.ResponseWriter, r *http.Request, admin store.AdminUser) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if h.risk == nil {
+		writeError(w, http.StatusServiceUnavailable, "risk control is not configured")
+		return
+	}
+
+	limit := parseIntWithDefault(r.URL.Query().Get("limit"), 50)
+	items, err := h.risk.GetTodaySignupStats(r.Context(), limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "load signup ip stats failed")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: map[string]any{
+		"date":  time.Now().Format("2006-01-02"),
+		"items": items,
+	}})
 }
 
 func (h *Handler) requireAuth(next func(http.ResponseWriter, *http.Request, store.AdminUser)) http.Handler {

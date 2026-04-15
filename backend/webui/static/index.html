@@ -139,6 +139,39 @@
             </div>
           </div>
 
+          <div id="panelRisk" class="panel hidden" data-panel="risk">
+            <section class="card release-card">
+              <div class="section-title">????</div>
+              <div class="muted">???????????????????? IP ???????</div>
+
+              <div class="release-grid">
+                <div class="stack">
+                  <label>
+                    ???????????
+                    <input id="riskKickMinutesInput" type="number" min="1" step="1" />
+                  </label>
+
+                  <label>
+                    ? IP ?????????
+                    <input id="riskSignupLimitInput" type="number" min="1" step="1" />
+                  </label>
+
+                  <div class="action-row compact">
+                    <button id="riskSaveButton">????</button>
+                    <button id="riskRefreshButton" class="secondary">????</button>
+                  </div>
+
+                  <div id="riskStatusText" class="muted"></div>
+                </div>
+
+                <div class="stack">
+                  <div class="section-title minor">???? IP ??</div>
+                  <div id="riskStatsList" class="list"></div>
+                </div>
+              </div>
+            </section>
+          </div>
+
           <div id="panelReleases" class="panel hidden" data-panel="releases">
             <section class="card release-card">
               <div class="section-title">安装包发布</div>

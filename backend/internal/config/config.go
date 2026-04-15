@@ -13,6 +13,9 @@ type Config struct {
 	EnableBroadcasts   bool
 	MsgRPCAddr         string
 	AuthsessionRPCAddr string
+	SyncRPCAddr        string
+	RedisAddr          string
+	RedisPass          string
 	ReleasesDir        string
 	PublicBaseURL      string
 	JWTSecret          string
@@ -45,6 +48,9 @@ func Load() (Config, error) {
 		EnableBroadcasts:   getEnvBool("ADMIN_ENABLE_BROADCASTS", true),
 		MsgRPCAddr:         strings.TrimSpace(os.Getenv("ADMIN_MSG_RPC_ADDR")),
 		AuthsessionRPCAddr: strings.TrimSpace(os.Getenv("ADMIN_AUTHSESSION_RPC_ADDR")),
+		SyncRPCAddr:        strings.TrimSpace(getEnv("ADMIN_SYNC_RPC_ADDR", "hsgram_server-teamgram-1:20420")),
+		RedisAddr:          strings.TrimSpace(getEnv("ADMIN_REDIS_ADDR", "redis:6379")),
+		RedisPass:          os.Getenv("ADMIN_REDIS_PASS"),
 		ReleasesDir:        strings.TrimSpace(getEnv("ADMIN_RELEASES_DIR", "./releases")),
 		PublicBaseURL:      strings.TrimRight(strings.TrimSpace(os.Getenv("ADMIN_PUBLIC_BASE_URL")), "/"),
 		JWTSecret:          os.Getenv("ADMIN_JWT_SECRET"),

@@ -23,6 +23,8 @@ const state = {
   selectedReleaseId: null,
   uploadProgress: 0,
   uploadState: "idle",
+  riskSettings: { kickLoginBlockSeconds: 300, signupIpDailyLimit: 5 },
+  signupIpStats: [],
 };
 
 const elements = {
@@ -32,6 +34,7 @@ const elements = {
   contentTitle: document.getElementById("contentTitle"),
   contentSubtitle: document.getElementById("contentSubtitle"),
   panelUsers: document.getElementById("panelUsers"),
+  panelRisk: document.getElementById("panelRisk"),
   panelReleases: document.getElementById("panelReleases"),
   panelBroadcast: document.getElementById("panelBroadcast"),
   sessionPanel: document.getElementById("sessionPanel"),
@@ -54,6 +57,12 @@ const elements = {
   unbanButton: document.getElementById("unbanButton"),
   kickSessionsButton: document.getElementById("kickSessionsButton"),
   sessionsList: document.getElementById("sessionsList"),
+  riskKickMinutesInput: document.getElementById("riskKickMinutesInput"),
+  riskSignupLimitInput: document.getElementById("riskSignupLimitInput"),
+  riskSaveButton: document.getElementById("riskSaveButton"),
+  riskRefreshButton: document.getElementById("riskRefreshButton"),
+  riskStatusText: document.getElementById("riskStatusText"),
+  riskStatsList: document.getElementById("riskStatsList"),
   auditLogsList: document.getElementById("auditLogsList"),
   broadcastDisabledNotice: document.getElementById("broadcastDisabledNotice"),
   broadcastTargetType: document.getElementById("broadcastTargetType"),
@@ -105,6 +114,8 @@ elements.nextPageButton.addEventListener("click", () => changePage(1));
 elements.banButton.addEventListener("click", () => mutateSelectedUser("ban"));
 elements.unbanButton.addEventListener("click", () => mutateSelectedUser("unban"));
 elements.kickSessionsButton.addEventListener("click", () => mutateSelectedUser("kick-sessions"));
+elements.riskSaveButton.addEventListener("click", saveRiskSettings);
+elements.riskRefreshButton.addEventListener("click", refreshRiskPanel);
 elements.broadcastTargetType.addEventListener("change", syncBroadcastTargetFields);
 elements.broadcastPreviewButton.addEventListener("click", previewBroadcast);
 elements.broadcastSendButton.addEventListener("click", sendBroadcast);
@@ -131,6 +142,7 @@ async function bootstrap() {
     state.features = response.data.features || { broadcasts: false };
     renderLoggedIn();
     await loadUsers();
+    await refreshRiskPanel();
     await loadReleases();
     if (state.features.broadcasts) {
       await loadBroadcasts();
@@ -163,6 +175,7 @@ async function onLogin(event) {
 
     renderLoggedIn();
     await loadUsers();
+    await refreshRiskPanel();
     await loadReleases();
     if (state.features.broadcasts) {
       await loadBroadcasts();
@@ -188,6 +201,8 @@ function logout() {
   state.selectedReleaseId = null;
   state.uploadProgress = 0;
   state.uploadState = "idle";
+  state.riskSettings = { kickLoginBlockSeconds: 300, signupIpDailyLimit: 5 };
+  state.signupIpStats = [];
   localStorage.removeItem("hsgram_admin_token");
   renderLoggedOut();
 }
@@ -200,7 +215,8 @@ function renderLoggedOut() {
 }
 
 function setActivePanel(panel) {
-  const id = panel === "releases" || panel === "broadcast" ? panel : "users";
+  const allowed = ["users", "risk", "releases", "broadcast"];
+  const id = allowed.includes(panel) ? panel : "users";
   state.activePanel = id;
 
   document.querySelectorAll(".nav-item").forEach((btn) => {
@@ -208,6 +224,7 @@ function setActivePanel(panel) {
   });
 
   elements.panelUsers.classList.toggle("hidden", id !== "users");
+  elements.panelRisk.classList.toggle("hidden", id !== "risk");
   elements.panelReleases.classList.toggle("hidden", id !== "releases");
   elements.panelBroadcast.classList.toggle("hidden", id !== "broadcast");
 
@@ -791,6 +808,80 @@ function renderBroadcastDetail(broadcast) {
     `;
     elements.broadcastDetailList.appendChild(item);
   });
+}
+
+
+async function loadRiskSettings() {
+  const response = await api("/api/admin/risk/settings");
+  state.riskSettings = response.data || { kickLoginBlockSeconds: 300, signupIpDailyLimit: 5 };
+  renderRiskPanel();
+}
+
+async function loadSignupIpStats() {
+  const response = await api("/api/admin/risk/signup-ip-stats?limit=50");
+  state.signupIpStats = (response.data && response.data.items) || [];
+  renderRiskPanel();
+}
+
+async function refreshRiskPanel() {
+  try {
+    await Promise.all([loadRiskSettings(), loadSignupIpStats()]);
+    elements.riskStatusText.textContent = "????????????";
+  } catch (error) {
+    elements.riskStatusText.textContent = error.message || "????????";
+    throw error;
+  }
+}
+
+function renderRiskPanel() {
+  const minutes = Math.max(1, Math.round((state.riskSettings.kickLoginBlockSeconds || 300) / 60));
+  elements.riskKickMinutesInput.value = String(minutes);
+  elements.riskSignupLimitInput.value = String(state.riskSettings.signupIpDailyLimit || 5);
+  elements.riskStatsList.innerHTML = "";
+
+  if (!state.signupIpStats.length) {
+    elements.riskStatsList.innerHTML = `<div class="muted">????????? IP ??</div>`;
+    return;
+  }
+
+  state.signupIpStats.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "list-item";
+    row.innerHTML = `
+      <div class="list-item-title">${escapeHTML(item.ip)}</div>
+      <div>?????: ${item.count}</div>
+    `;
+    elements.riskStatsList.appendChild(row);
+  });
+}
+
+async function saveRiskSettings() {
+  const kickMinutes = Number(elements.riskKickMinutesInput.value || 0);
+  const signupLimit = Number(elements.riskSignupLimitInput.value || 0);
+  if (!Number.isFinite(kickMinutes) || kickMinutes < 1) {
+    toast("????????????? 1");
+    return;
+  }
+  if (!Number.isFinite(signupLimit) || signupLimit < 1) {
+    toast("? IP ????????? 1");
+    return;
+  }
+
+  try {
+    const response = await api("/api/admin/risk/settings", {
+      method: "POST",
+      body: JSON.stringify({
+        kickLoginBlockSeconds: Math.round(kickMinutes * 60),
+        signupIpDailyLimit: Math.round(signupLimit),
+      }),
+    });
+    state.riskSettings = response.data;
+    renderRiskPanel();
+    elements.riskStatusText.textContent = "????????";
+    toast("???????");
+  } catch (error) {
+    toast(error.message || "????????");
+  }
 }
 
 function changePage(offset) {
