@@ -826,7 +826,7 @@ async function loadSignupIpStats() {
 async function refreshRiskPanel() {
   try {
     await Promise.all([loadRiskSettings(), loadSignupIpStats()]);
-    elements.riskStatusText.textContent = "????????????";
+    elements.riskStatusText.textContent = "??????????";
   } catch (error) {
     elements.riskStatusText.textContent = error.message || "????????";
     throw error;
@@ -840,7 +840,7 @@ function renderRiskPanel() {
   elements.riskStatsList.innerHTML = "";
 
   if (!state.signupIpStats.length) {
-    elements.riskStatsList.innerHTML = `<div class="muted">????????? IP ??</div>`;
+    elements.riskStatsList.innerHTML = `<div class="muted">???????? IP ??</div>`;
     return;
   }
 
@@ -859,11 +859,11 @@ async function saveRiskSettings() {
   const kickMinutes = Number(elements.riskKickMinutesInput.value || 0);
   const signupLimit = Number(elements.riskSignupLimitInput.value || 0);
   if (!Number.isFinite(kickMinutes) || kickMinutes < 1) {
-    toast("????????????? 1");
+    toast("???????????? 1");
     return;
   }
   if (!Number.isFinite(signupLimit) || signupLimit < 1) {
-    toast("? IP ????????? 1");
+    toast("? IP ???????? 1");
     return;
   }
 
@@ -877,7 +877,7 @@ async function saveRiskSettings() {
     });
     state.riskSettings = response.data;
     renderRiskPanel();
-    elements.riskStatusText.textContent = "????????";
+    elements.riskStatusText.textContent = "???????";
     toast("???????");
   } catch (error) {
     toast(error.message || "????????");
