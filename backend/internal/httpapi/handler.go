@@ -17,6 +17,7 @@ import (
 	"hsgram-admin/backend/internal/authsessionrpc"
 	"hsgram-admin/backend/internal/broadcast"
 	"hsgram-admin/backend/internal/gatewayrpc"
+	"hsgram-admin/backend/internal/invitecodes"
 	"hsgram-admin/backend/internal/risk"
 	"hsgram-admin/backend/internal/statusrpc"
 	"hsgram-admin/backend/internal/store"
@@ -33,6 +34,7 @@ type Handler struct {
 	status       *statusrpc.Client
 	gateway      *gatewayrpc.Client
 	risk         *risk.Service
+	invites      *invitecodes.Service
 	updates      UpdateConfig
 	web          http.Handler
 	releases     http.Handler
@@ -49,7 +51,7 @@ type featureFlags struct {
 	Broadcasts bool `json:"broadcasts"`
 }
 
-func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Service, authsessions *authsessionrpc.Client, syncClient *syncrpc.Client, statusClient *statusrpc.Client, gatewayClient *gatewayrpc.Client, riskService *risk.Service, updates UpdateConfig) http.Handler {
+func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Service, authsessions *authsessionrpc.Client, syncClient *syncrpc.Client, statusClient *statusrpc.Client, gatewayClient *gatewayrpc.Client, riskService *risk.Service, inviteService *invitecodes.Service, updates UpdateConfig) http.Handler {
 	handler := &Handler{
 		tokens:       tokens,
 		store:        userStore,
@@ -59,6 +61,7 @@ func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Ser
 		status:       statusClient,
 		gateway:      gatewayClient,
 		risk:         riskService,
+		invites:      inviteService,
 		updates:      updates,
 		web:          webui.NewHandler(),
 		releases:     http.StripPrefix("/releases/", http.FileServer(http.Dir(updates.ReleasesDir))),
@@ -78,6 +81,8 @@ func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Ser
 	mux.Handle("/api/admin/users/", handler.requireAuth(handler.handleUserRoutes))
 	mux.Handle("/api/admin/risk/settings", handler.requireSuperAdmin(handler.handleRiskSettings))
 	mux.Handle("/api/admin/risk/signup-ip-stats", handler.requireSuperAdmin(handler.handleRiskSignupIPStats))
+	mux.Handle("/api/admin/invite-codes", handler.requireSuperAdmin(handler.handleInviteCodes))
+	mux.Handle("/api/admin/invite-codes/", handler.requireSuperAdmin(handler.handleInviteCodeRoutes))
 	mux.Handle("/api/admin/broadcasts/preview", handler.requireSuperAdmin(handler.handleBroadcastPreview))
 	mux.Handle("/api/admin/broadcasts", handler.requireSuperAdmin(handler.handleBroadcastRoutes))
 	mux.Handle("/api/admin/broadcasts/", handler.requireSuperAdmin(handler.handleBroadcastRoutes))

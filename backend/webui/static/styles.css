@@ -377,6 +377,19 @@ tbody tr.active {
   border: 1px solid #e8edf7;
 }
 
+.invite-code-row {
+  cursor: pointer;
+}
+
+.invite-code-row.selected {
+  border-color: #2f6fed;
+  background: #eef4ff;
+}
+
+.invite-actions {
+  margin-top: 12px;
+}
+
 .list-item-title {
   font-weight: bold;
   margin-bottom: 6px;
