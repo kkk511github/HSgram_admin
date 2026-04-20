@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/zeromicro/go-zero/core/stores/kv"
+	redisstore "github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 const (
@@ -201,6 +202,9 @@ func (s *Service) getCode(ctx context.Context, rawCode string) (*Code, error) {
 
 	raw, err := s.kv.HgetCtx(ctx, codesHashKey, code)
 	if err != nil {
+		if errors.Is(err, redisstore.Nil) {
+			return nil, ErrCodeNotFound
+		}
 		return nil, err
 	}
 	if raw == "" {
