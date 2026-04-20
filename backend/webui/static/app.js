@@ -27,6 +27,7 @@ const state = {
   uploadState: "idle",
   riskSettings: { kickLoginBlockSeconds: 300, signupIpDailyLimit: 5 },
   signupIpStats: [],
+  inviteSettings: { enabled: true, updatedAt: 0 },
   inviteCodes: [],
   selectedInviteCode: null,
   selectedInviteDetail: null,
@@ -72,6 +73,8 @@ const elements = {
   inviteCodeInput: document.getElementById("inviteCodeInput"),
   inviteMaxUsesInput: document.getElementById("inviteMaxUsesInput"),
   inviteNoteInput: document.getElementById("inviteNoteInput"),
+  inviteSignupEnabledInput: document.getElementById("inviteSignupEnabledInput"),
+  inviteSettingsSaveButton: document.getElementById("inviteSettingsSaveButton"),
   inviteCreateButton: document.getElementById("inviteCreateButton"),
   inviteRefreshButton: document.getElementById("inviteRefreshButton"),
   inviteStatusText: document.getElementById("inviteStatusText"),
@@ -132,8 +135,9 @@ elements.unbanButton.addEventListener("click", () => mutateSelectedUser("unban")
 elements.kickSessionsButton.addEventListener("click", () => mutateSelectedUser("kick-sessions"));
 elements.riskSaveButton.addEventListener("click", saveRiskSettings);
 elements.riskRefreshButton.addEventListener("click", refreshRiskPanel);
+elements.inviteSettingsSaveButton.addEventListener("click", saveInviteSettings);
 elements.inviteCreateButton.addEventListener("click", createInviteCode);
-elements.inviteRefreshButton.addEventListener("click", () => loadInviteCodes().catch((error) => toast(error.message || "加载邀请码失败")));
+elements.inviteRefreshButton.addEventListener("click", () => refreshInvitePanel().catch((error) => toast(error.message || "加载邀请码失败")));
 elements.inviteEnableButton.addEventListener("click", () => updateInviteCodeEnabled(true));
 elements.inviteDisableButton.addEventListener("click", () => updateInviteCodeEnabled(false));
 elements.broadcastTargetType.addEventListener("change", syncBroadcastTargetFields);
@@ -163,7 +167,7 @@ async function bootstrap() {
     renderLoggedIn();
     await loadUsers();
     await refreshRiskPanel();
-    await loadInviteCodes();
+    await refreshInvitePanel();
     await loadReleases();
     if (state.features.broadcasts) {
       await loadBroadcasts();
@@ -197,7 +201,7 @@ async function onLogin(event) {
     renderLoggedIn();
     await loadUsers();
     await refreshRiskPanel();
-    await loadInviteCodes();
+    await refreshInvitePanel();
     await loadReleases();
     if (state.features.broadcasts) {
       await loadBroadcasts();
@@ -225,6 +229,7 @@ function logout() {
   state.uploadState = "idle";
   state.riskSettings = { kickLoginBlockSeconds: 300, signupIpDailyLimit: 5 };
   state.signupIpStats = [];
+  state.inviteSettings = { enabled: true, updatedAt: 0 };
   state.inviteCodes = [];
   state.selectedInviteCode = null;
   state.selectedInviteDetail = null;
@@ -857,6 +862,22 @@ async function loadInviteCodes() {
   }
 }
 
+async function loadInviteSettings() {
+  const response = await api("/api/admin/invite-code-settings");
+  state.inviteSettings = response.data || { enabled: true, updatedAt: 0 };
+  renderInviteSettings();
+}
+
+async function refreshInvitePanel() {
+  try {
+    await Promise.all([loadInviteSettings(), loadInviteCodes()]);
+    elements.inviteStatusText.textContent = "邀请码设置和列表已刷新";
+  } catch (error) {
+    elements.inviteStatusText.textContent = error.message || "邀请码数据加载失败";
+    throw error;
+  }
+}
+
 function renderInviteCodes() {
   elements.inviteCodesList.innerHTML = "";
   if (!state.inviteCodes.length) {
@@ -876,6 +897,10 @@ function renderInviteCodes() {
     row.addEventListener("click", () => loadInviteDetail(item.code));
     elements.inviteCodesList.appendChild(row);
   });
+}
+
+function renderInviteSettings() {
+  elements.inviteSignupEnabledInput.checked = !!state.inviteSettings.enabled;
 }
 
 async function createInviteCode() {
@@ -904,6 +929,23 @@ async function createInviteCode() {
     await loadInviteDetail(response.data.code);
   } catch (error) {
     toast(error.message || "创建邀请码失败");
+  }
+}
+
+async function saveInviteSettings() {
+  try {
+    const response = await api("/api/admin/invite-code-settings", {
+      method: "POST",
+      body: JSON.stringify({
+        enabled: !!elements.inviteSignupEnabledInput.checked,
+      }),
+    });
+    state.inviteSettings = response.data || { enabled: true, updatedAt: 0 };
+    renderInviteSettings();
+    elements.inviteStatusText.textContent = "邀请码注册开关已保存";
+    toast(state.inviteSettings.enabled ? "已启用邀请码注册" : "已关闭邀请码注册");
+  } catch (error) {
+    toast(error.message || "保存邀请码设置失败");
   }
 }
 

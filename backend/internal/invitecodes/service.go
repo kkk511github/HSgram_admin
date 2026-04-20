@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	codesHashKey  = "hs:signup_invite:codes"
-	usesKeyPrefix = "hs:signup_invite:uses"
+	codesHashKey     = "hs:signup_invite:codes"
+	usesKeyPrefix    = "hs:signup_invite:uses"
+	settingsCacheKey = "hs:signup_invite:settings:v1"
 )
 
 var (
@@ -59,6 +60,11 @@ type CreateRequest struct {
 	MaxUses int    `json:"maxUses"`
 }
 
+type Settings struct {
+	Enabled   bool  `json:"enabled"`
+	UpdatedAt int64 `json:"updatedAt"`
+}
+
 func New(store kv.Store) *Service {
 	if store == nil {
 		return nil
@@ -68,6 +74,13 @@ func New(store kv.Store) *Service {
 
 func NormalizeCode(code string) string {
 	return strings.ToUpper(strings.TrimSpace(code))
+}
+
+func DefaultSettings() Settings {
+	return Settings{
+		Enabled:   true,
+		UpdatedAt: 0,
+	}
 }
 
 func (s *Service) ListCodes(ctx context.Context) ([]Code, error) {
@@ -192,6 +205,45 @@ func (s *Service) SetCodeEnabled(ctx context.Context, rawCode string, enabled bo
 		return nil, err
 	}
 	return code, nil
+}
+
+func (s *Service) GetSettings(ctx context.Context) (Settings, error) {
+	settings := DefaultSettings()
+	if s == nil || s.kv == nil {
+		return settings, nil
+	}
+
+	raw, err := s.kv.GetCtx(ctx, settingsCacheKey)
+	if err != nil {
+		if errors.Is(err, redisstore.Nil) {
+			return settings, nil
+		}
+		return settings, err
+	}
+	if raw == "" {
+		return settings, nil
+	}
+
+	if err := json.Unmarshal([]byte(raw), &settings); err != nil {
+		return DefaultSettings(), nil
+	}
+	return settings, nil
+}
+
+func (s *Service) UpdateSettings(ctx context.Context, enabled bool) (Settings, error) {
+	settings, err := s.GetSettings(ctx)
+	if err != nil {
+		return settings, err
+	}
+
+	settings.Enabled = enabled
+	settings.UpdatedAt = time.Now().Unix()
+	if s == nil || s.kv == nil {
+		return settings, nil
+	}
+
+	payload, _ := json.Marshal(&settings)
+	return settings, s.kv.SetCtx(ctx, settingsCacheKey, string(payload))
 }
 
 func (s *Service) getCode(ctx context.Context, rawCode string) (*Code, error) {

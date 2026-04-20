@@ -55,6 +55,44 @@ func (h *Handler) handleInviteCodes(w http.ResponseWriter, r *http.Request, admi
 	}
 }
 
+func (h *Handler) handleInviteCodeSettings(w http.ResponseWriter, r *http.Request, admin store.AdminUser) {
+	if h.invites == nil {
+		writeError(w, http.StatusServiceUnavailable, "invite code service unavailable")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		settings, err := h.invites.GetSettings(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "load invite settings failed")
+			return
+		}
+		writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: settings})
+	case http.MethodPost:
+		var request struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid json body")
+			return
+		}
+
+		settings, err := h.invites.UpdateSettings(r.Context(), request.Enabled)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "save invite settings failed")
+			return
+		}
+
+		_ = h.store.CreateAuditLog(r.Context(), admin, "invite_code.settings.update", 0, map[string]any{
+			"enabled": settings.Enabled,
+		})
+		writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: settings})
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
 func (h *Handler) handleInviteCodeRoutes(w http.ResponseWriter, r *http.Request, admin store.AdminUser) {
 	if h.invites == nil {
 		writeError(w, http.StatusServiceUnavailable, "invite code service unavailable")
