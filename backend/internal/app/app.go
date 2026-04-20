@@ -13,6 +13,7 @@ import (
 	"hsgram-admin/backend/internal/config"
 	"hsgram-admin/backend/internal/gatewayrpc"
 	"hsgram-admin/backend/internal/httpapi"
+	"hsgram-admin/backend/internal/invitecodes"
 	"hsgram-admin/backend/internal/messenger"
 	"hsgram-admin/backend/internal/risk"
 	"hsgram-admin/backend/internal/statusrpc"
@@ -35,6 +36,7 @@ type App struct {
 	gatewayClient     *gatewayrpc.Client
 	broadcaster       *broadcast.Service
 	riskService       *risk.Service
+	inviteCodes       *invitecodes.Service
 	handler           http.Handler
 }
 
@@ -60,6 +62,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	tokenMgr := auth.NewManager(cfg.JWTSecret, cfg.TokenTTL)
 	kvStore := kv.NewStore(cache.ClusterConf{{RedisConf: redisstore.RedisConf{Host: cfg.RedisAddr, Pass: cfg.RedisPass, Type: "node"}, Weight: 100}})
 	riskService := risk.New(kvStore)
+	inviteService := invitecodes.New(kvStore)
 	var msgClient *messenger.Client
 	var authsessionClient *authsessionrpc.Client
 	var syncClient *syncrpc.Client
@@ -158,7 +161,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		log.Printf("admin-api: ADMIN_GATEWAY_RPC_ADDR is empty; online socket disconnect will be disabled")
 	}
 
-	handler := httpapi.New(tokenMgr, userStore, broadcaster, authsessionClient, syncClient, statusClient, gatewayClient, riskService, httpapi.UpdateConfig{
+	handler := httpapi.New(tokenMgr, userStore, broadcaster, authsessionClient, syncClient, statusClient, gatewayClient, riskService, inviteService, httpapi.UpdateConfig{
 		ReleasesDir:   cfg.ReleasesDir,
 		PublicBaseURL: cfg.PublicBaseURL,
 	})
@@ -174,6 +177,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		gatewayClient:     gatewayClient,
 		broadcaster:       broadcaster,
 		riskService:       riskService,
+		inviteCodes:       inviteService,
 		handler:           handler,
 	}, nil
 }

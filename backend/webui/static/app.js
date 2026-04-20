@@ -1,6 +1,7 @@
 const PANEL_META = {
   users: { title: "用户管理", subtitle: "搜索与处理用户账号、会话与审计" },
   risk: { title: "风控策略", subtitle: "配置踢下线后的登录限制，以及同 IP 注册上限" },
+  invites: { title: "邀请码", subtitle: "生成邀请码并查看实时使用记录" },
   releases: { title: "安装包发布", subtitle: "上传 Android / PC 安装包并发布为当前最新版本" },
   broadcast: { title: "系统广播", subtitle: "通过系统通知号向用户发送广播消息" },
 };
@@ -26,6 +27,10 @@ const state = {
   uploadState: "idle",
   riskSettings: { kickLoginBlockSeconds: 300, signupIpDailyLimit: 5 },
   signupIpStats: [],
+  inviteSettings: { enabled: true, updatedAt: 0 },
+  inviteCodes: [],
+  selectedInviteCode: null,
+  selectedInviteDetail: null,
 };
 
 const elements = {
@@ -36,6 +41,7 @@ const elements = {
   contentSubtitle: document.getElementById("contentSubtitle"),
   panelUsers: document.getElementById("panelUsers"),
   panelRisk: document.getElementById("panelRisk"),
+  panelInvites: document.getElementById("panelInvites"),
   panelReleases: document.getElementById("panelReleases"),
   panelBroadcast: document.getElementById("panelBroadcast"),
   sessionPanel: document.getElementById("sessionPanel"),
@@ -64,6 +70,18 @@ const elements = {
   riskRefreshButton: document.getElementById("riskRefreshButton"),
   riskStatusText: document.getElementById("riskStatusText"),
   riskStatsList: document.getElementById("riskStatsList"),
+  inviteCodeInput: document.getElementById("inviteCodeInput"),
+  inviteMaxUsesInput: document.getElementById("inviteMaxUsesInput"),
+  inviteNoteInput: document.getElementById("inviteNoteInput"),
+  inviteSignupEnabledInput: document.getElementById("inviteSignupEnabledInput"),
+  inviteSettingsSaveButton: document.getElementById("inviteSettingsSaveButton"),
+  inviteCreateButton: document.getElementById("inviteCreateButton"),
+  inviteRefreshButton: document.getElementById("inviteRefreshButton"),
+  inviteStatusText: document.getElementById("inviteStatusText"),
+  inviteCodesList: document.getElementById("inviteCodesList"),
+  inviteDetailList: document.getElementById("inviteDetailList"),
+  inviteEnableButton: document.getElementById("inviteEnableButton"),
+  inviteDisableButton: document.getElementById("inviteDisableButton"),
   auditLogsList: document.getElementById("auditLogsList"),
   broadcastDisabledNotice: document.getElementById("broadcastDisabledNotice"),
   broadcastTargetType: document.getElementById("broadcastTargetType"),
@@ -117,6 +135,11 @@ elements.unbanButton.addEventListener("click", () => mutateSelectedUser("unban")
 elements.kickSessionsButton.addEventListener("click", () => mutateSelectedUser("kick-sessions"));
 elements.riskSaveButton.addEventListener("click", saveRiskSettings);
 elements.riskRefreshButton.addEventListener("click", refreshRiskPanel);
+elements.inviteSettingsSaveButton.addEventListener("click", saveInviteSettings);
+elements.inviteCreateButton.addEventListener("click", createInviteCode);
+elements.inviteRefreshButton.addEventListener("click", () => refreshInvitePanel().catch((error) => toast(error.message || "加载邀请码失败")));
+elements.inviteEnableButton.addEventListener("click", () => updateInviteCodeEnabled(true));
+elements.inviteDisableButton.addEventListener("click", () => updateInviteCodeEnabled(false));
 elements.broadcastTargetType.addEventListener("change", syncBroadcastTargetFields);
 elements.broadcastPreviewButton.addEventListener("click", previewBroadcast);
 elements.broadcastSendButton.addEventListener("click", sendBroadcast);
@@ -144,6 +167,7 @@ async function bootstrap() {
     renderLoggedIn();
     await loadUsers();
     await refreshRiskPanel();
+    await refreshInvitePanel();
     await loadReleases();
     if (state.features.broadcasts) {
       await loadBroadcasts();
@@ -177,6 +201,7 @@ async function onLogin(event) {
     renderLoggedIn();
     await loadUsers();
     await refreshRiskPanel();
+    await refreshInvitePanel();
     await loadReleases();
     if (state.features.broadcasts) {
       await loadBroadcasts();
@@ -204,6 +229,10 @@ function logout() {
   state.uploadState = "idle";
   state.riskSettings = { kickLoginBlockSeconds: 300, signupIpDailyLimit: 5 };
   state.signupIpStats = [];
+  state.inviteSettings = { enabled: true, updatedAt: 0 };
+  state.inviteCodes = [];
+  state.selectedInviteCode = null;
+  state.selectedInviteDetail = null;
   localStorage.removeItem("hsgram_admin_token");
   renderLoggedOut();
 }
@@ -216,7 +245,7 @@ function renderLoggedOut() {
 }
 
 function setActivePanel(panel) {
-  const allowed = ["users", "risk", "releases", "broadcast"];
+  const allowed = ["users", "risk", "invites", "releases", "broadcast"];
   const id = allowed.includes(panel) ? panel : "users";
   state.activePanel = id;
 
@@ -226,6 +255,7 @@ function setActivePanel(panel) {
 
   elements.panelUsers.classList.toggle("hidden", id !== "users");
   elements.panelRisk.classList.toggle("hidden", id !== "risk");
+  elements.panelInvites.classList.toggle("hidden", id !== "invites");
   elements.panelReleases.classList.toggle("hidden", id !== "releases");
   elements.panelBroadcast.classList.toggle("hidden", id !== "broadcast");
 
@@ -812,6 +842,186 @@ function renderBroadcastDetail(broadcast) {
 }
 
 
+async function loadInviteCodes() {
+  try {
+    const response = await api("/api/admin/invite-codes");
+    state.inviteCodes = response.data || [];
+    if (state.selectedInviteCode) {
+      const exists = state.inviteCodes.some((item) => item.code === state.selectedInviteCode);
+      if (!exists) {
+        state.selectedInviteCode = null;
+        state.selectedInviteDetail = null;
+      }
+    }
+    renderInviteCodes();
+    renderInviteDetail();
+    elements.inviteStatusText.textContent = "邀请码列表已刷新";
+  } catch (error) {
+    elements.inviteStatusText.textContent = error.message || "邀请码列表加载失败";
+    throw error;
+  }
+}
+
+async function loadInviteSettings() {
+  const response = await api("/api/admin/invite-code-settings");
+  state.inviteSettings = response.data || { enabled: true, updatedAt: 0 };
+  renderInviteSettings();
+}
+
+async function refreshInvitePanel() {
+  try {
+    await Promise.all([loadInviteSettings(), loadInviteCodes()]);
+    elements.inviteStatusText.textContent = "邀请码设置和列表已刷新";
+  } catch (error) {
+    elements.inviteStatusText.textContent = error.message || "邀请码数据加载失败";
+    throw error;
+  }
+}
+
+function renderInviteCodes() {
+  elements.inviteCodesList.innerHTML = "";
+  if (!state.inviteCodes.length) {
+    elements.inviteCodesList.innerHTML = `<div class="muted">暂时还没有邀请码</div>`;
+    return;
+  }
+
+  state.inviteCodes.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "list-item invite-code-row";
+    row.classList.toggle("selected", item.code === state.selectedInviteCode);
+    row.innerHTML = `
+      <div class="list-item-title">${escapeHTML(item.code)}</div>
+      <div>状态: ${item.enabled ? "启用中" : "已禁用"} | 已用: ${item.usedCount}/${item.maxUses > 0 ? item.maxUses : "不限"}</div>
+      <div>备注: ${escapeHTML(item.note || "-")}</div>
+    `;
+    row.addEventListener("click", () => loadInviteDetail(item.code));
+    elements.inviteCodesList.appendChild(row);
+  });
+}
+
+function renderInviteSettings() {
+  elements.inviteSignupEnabledInput.checked = !!state.inviteSettings.enabled;
+}
+
+async function createInviteCode() {
+  const maxUses = Number(elements.inviteMaxUsesInput.value || 0);
+  if (!Number.isFinite(maxUses) || maxUses < 0) {
+    toast("可用次数不能小于 0");
+    return;
+  }
+
+  try {
+    const response = await api("/api/admin/invite-codes", {
+      method: "POST",
+      body: JSON.stringify({
+        code: elements.inviteCodeInput.value.trim(),
+        note: elements.inviteNoteInput.value.trim(),
+        maxUses: Math.round(maxUses),
+      }),
+    });
+
+    elements.inviteCodeInput.value = "";
+    elements.inviteNoteInput.value = "";
+    elements.inviteMaxUsesInput.value = "1";
+    state.selectedInviteCode = response.data.code;
+    toast(`邀请码 ${response.data.code} 已创建`);
+    await loadInviteCodes();
+    await loadInviteDetail(response.data.code);
+  } catch (error) {
+    toast(error.message || "创建邀请码失败");
+  }
+}
+
+async function saveInviteSettings() {
+  try {
+    const response = await api("/api/admin/invite-code-settings", {
+      method: "POST",
+      body: JSON.stringify({
+        enabled: !!elements.inviteSignupEnabledInput.checked,
+      }),
+    });
+    state.inviteSettings = response.data || { enabled: true, updatedAt: 0 };
+    renderInviteSettings();
+    elements.inviteStatusText.textContent = "邀请码注册开关已保存";
+    toast(state.inviteSettings.enabled ? "已启用邀请码注册" : "已关闭邀请码注册");
+  } catch (error) {
+    toast(error.message || "保存邀请码设置失败");
+  }
+}
+
+async function loadInviteDetail(code) {
+  try {
+    const response = await api(`/api/admin/invite-codes/${encodeURIComponent(code)}`);
+    state.selectedInviteCode = code;
+    state.selectedInviteDetail = response.data;
+    renderInviteCodes();
+    renderInviteDetail();
+  } catch (error) {
+    toast(error.message || "加载邀请码详情失败");
+  }
+}
+
+function renderInviteDetail() {
+  elements.inviteDetailList.innerHTML = "";
+  elements.inviteEnableButton.disabled = !state.selectedInviteCode;
+  elements.inviteDisableButton.disabled = !state.selectedInviteCode;
+
+  if (!state.selectedInviteDetail) {
+    elements.inviteDetailList.innerHTML = `<div class="muted">从列表中选择一个邀请码查看详情。</div>`;
+    return;
+  }
+
+  const { code, usages } = state.selectedInviteDetail;
+  const summary = document.createElement("div");
+  summary.className = "list-item";
+  summary.innerHTML = `
+    <div class="list-item-title">${escapeHTML(code.code)}</div>
+    <div>状态: ${code.enabled ? "启用中" : "已禁用"} | 创建人: ${escapeHTML(code.createdBy || "-")}</div>
+    <div>可用次数: ${code.maxUses > 0 ? code.maxUses : "不限"} | 已用次数: ${code.usedCount}</div>
+    <div>备注: ${escapeHTML(code.note || "-")}</div>
+    <div>创建时间: ${formatUnixDateTime(code.createdAt)} | 更新时间: ${formatUnixDateTime(code.updatedAt)}</div>
+  `;
+  elements.inviteDetailList.appendChild(summary);
+
+  if (!usages || !usages.length) {
+    const empty = document.createElement("div");
+    empty.className = "muted";
+    empty.textContent = "还没有使用记录";
+    elements.inviteDetailList.appendChild(empty);
+    return;
+  }
+
+  usages.forEach((usage) => {
+    const item = document.createElement("div");
+    item.className = "list-item";
+    item.innerHTML = `
+      <div class="list-item-title">${escapeHTML(usage.phone || "-")}</div>
+      <div>状态: ${escapeHTML(usage.status || "-")} | 用户 ID: ${usage.userId || 0}</div>
+      <div>时间: ${formatUnixDateTime(usage.usedAt)}</div>
+    `;
+    elements.inviteDetailList.appendChild(item);
+  });
+}
+
+async function updateInviteCodeEnabled(enabled) {
+  if (!state.selectedInviteCode) {
+    toast("请先选择邀请码");
+    return;
+  }
+
+  const action = enabled ? "enable" : "disable";
+  try {
+    await api(`/api/admin/invite-codes/${encodeURIComponent(state.selectedInviteCode)}/${action}`, {
+      method: "POST",
+    });
+    toast(enabled ? "邀请码已启用" : "邀请码已禁用");
+    await loadInviteCodes();
+    await loadInviteDetail(state.selectedInviteCode);
+  } catch (error) {
+    toast(error.message || "更新邀请码状态失败");
+  }
+}
+
 async function loadRiskSettings() {
   const response = await api("/api/admin/risk/settings");
   state.riskSettings = response.data || { kickLoginBlockSeconds: 300, signupIpDailyLimit: 5 };
@@ -955,6 +1165,14 @@ function formatDateTime(value) {
     return "-";
   }
   return date.toLocaleString();
+}
+
+function formatUnixDateTime(value) {
+  const seconds = Number(value || 0);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return "-";
+  }
+  return new Date(seconds * 1000).toLocaleString();
 }
 
 function formatFileSize(size) {
