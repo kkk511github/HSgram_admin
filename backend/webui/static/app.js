@@ -157,6 +157,14 @@ elements.inviteEnableButton.addEventListener("click", () => updateInviteCodeEnab
 elements.inviteDisableButton.addEventListener("click", () => updateInviteCodeEnabled(false));
 elements.supportRefreshButton.addEventListener("click", () => refreshSupportPanel().catch((error) => toast(error.message || "加载客服消息失败")));
 elements.supportReplyButton.addEventListener("click", sendSupportReply);
+elements.supportReplyInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    if (!elements.supportReplyButton.disabled) {
+      sendSupportReply();
+    }
+  }
+});
 elements.broadcastTargetType.addEventListener("change", syncBroadcastTargetFields);
 elements.broadcastPreviewButton.addEventListener("click", previewBroadcast);
 elements.broadcastSendButton.addEventListener("click", sendBroadcast);
@@ -1296,36 +1304,63 @@ function renderSupportThreads() {
   elements.supportThreadsList.innerHTML = "";
 
   if (!state.supportThreads.length) {
-    elements.supportThreadsList.innerHTML = `<div class="muted">暂时还没有用户咨询。</div>`;
+    elements.supportThreadsList.innerHTML = `
+      <div class="support-empty-state">
+        <div class="support-empty-title">暂时还没有用户咨询</div>
+        <div class="support-empty-subtitle">用户发送到客服号的消息，会按最近时间自动出现在这里。</div>
+      </div>
+    `;
     return;
   }
 
   state.supportThreads.forEach((thread) => {
+    const displayName = getSupportDisplayName(thread);
+    const lastText = (thread.lastMessageText || "").trim() || "空消息";
+    const tags = [];
+    if (thread.username) {
+      tags.push(`<span class="support-chip">@${escapeHTML(thread.username)}</span>`);
+    }
+    if (thread.phone) {
+      tags.push(`<span class="support-chip">${escapeHTML(thread.phone)}</span>`);
+    }
+    const unreadBadge = thread.unreadCount > 0 ? `<span class="support-unread">${thread.unreadCount}</span>` : "";
+
     const item = document.createElement("div");
     item.className = "list-item support-thread-item";
     item.classList.toggle("selected", thread.userId === state.selectedSupportUserId);
-
-    const lastText = (thread.lastMessageText || "").trim() || "空消息";
-    const unreadBadge = thread.unreadCount > 0 ? `<span class="support-unread">${thread.unreadCount}</span>` : "";
-    const subline = [thread.username ? `@${escapeHTML(thread.username)}` : "", thread.phone ? escapeHTML(thread.phone) : ""]
-      .filter(Boolean)
-      .join(" | ");
-
+    item.tabIndex = 0;
+    item.setAttribute("role", "button");
+    item.setAttribute("aria-label", `${displayName} 客服会话`);
     item.innerHTML = `
-      <div class="support-thread-row">
-        <div class="list-item-title">${escapeHTML(thread.displayName || `用户 ${thread.userId}`)}</div>
-        <div class="support-thread-meta">${formatSupportTimestamp(thread.lastMessageAt)}</div>
-      </div>
-      <div class="support-thread-subtitle">ID: ${thread.userId}${subline ? ` | ${subline}` : ""}</div>
-      <div class="support-thread-row">
-        <div class="support-thread-preview">${escapeHTML(lastText.slice(0, 80))}</div>
-        ${unreadBadge}
+      <div class="support-thread-avatar">${escapeHTML(getSupportInitials(displayName, thread.userId))}</div>
+      <div class="support-thread-content">
+        <div class="support-thread-row">
+          <div class="support-thread-title-wrap">
+            <div class="support-thread-title">${escapeHTML(displayName)}</div>
+            <div class="support-thread-id">ID ${thread.userId}</div>
+          </div>
+          <div class="support-thread-side">
+            <div class="support-thread-meta">${escapeHTML(formatSupportTimestamp(thread.lastMessageAt))}</div>
+            ${unreadBadge}
+          </div>
+        </div>
+        ${tags.length ? `<div class="support-thread-tags">${tags.join("")}</div>` : ""}
+        <div class="support-thread-preview">${escapeHTML(lastText.slice(0, 96))}</div>
       </div>
     `;
-    item.addEventListener("click", () => {
+
+    const activateThread = () => {
       state.selectedSupportUserId = thread.userId;
       renderSupportThreads();
       refreshSupportPanel(true).catch((error) => toast(error.message || "加载客服消息失败"));
+    };
+
+    item.addEventListener("click", activateThread);
+    item.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        activateThread();
+      }
     });
     elements.supportThreadsList.appendChild(item);
   });
@@ -1334,38 +1369,86 @@ function renderSupportThreads() {
 function renderSupportDetail() {
   const detail = state.selectedSupportThread;
   const hasThread = !!(detail && detail.thread);
+  const messages = hasThread && Array.isArray(detail.messages) ? detail.messages : [];
 
   elements.supportReplyInput.disabled = !hasThread;
   elements.supportReplyButton.disabled = !hasThread;
-  elements.supportMessages.classList.toggle("empty", !hasThread || !(detail.messages || []).length);
+  elements.supportReplyInput.placeholder = hasThread ? "输入要回复给用户的内容" : "选择左侧会话后再回复";
+  elements.supportMessages.classList.toggle("empty", !hasThread || !messages.length);
 
   if (!hasThread) {
-    elements.supportThreadHeader.textContent = "选择左侧会话查看客服对话。";
-    elements.supportMessages.innerHTML = "暂无客服消息";
+    elements.supportThreadHeader.innerHTML = `
+      <div class="support-thread-empty">
+        <div class="support-empty-title">选择一个会话开始处理</div>
+        <div class="support-empty-subtitle">左侧会显示最近联系过客服的用户，点开后即可查看完整消息并直接回复。</div>
+      </div>
+    `;
+    elements.supportMessages.innerHTML = `
+      <div class="support-empty-state">
+        <div class="support-empty-title">这里会显示完整对话</div>
+        <div class="support-empty-subtitle">发送回复后，这里的消息会自动刷新并同步到客户端的客服号会话。</div>
+      </div>
+    `;
     return;
   }
 
   const thread = detail.thread;
-  const headerParts = [
-    `${thread.displayName || `用户 ${thread.userId}`} (${thread.userId})`,
-    thread.username ? `@${thread.username}` : "",
-    thread.phone || "",
-  ].filter(Boolean);
-  elements.supportThreadHeader.textContent = headerParts.join(" | ");
+  const displayName = getSupportDisplayName(thread);
+  const latestMessage = messages.length ? messages[messages.length - 1] : null;
+  const latestTimestamp = formatSupportMessageTimestamp(latestMessage) || formatSupportTimestamp(thread.lastMessageAt, true);
+  const headerTags = [`<span class="support-chip">ID ${thread.userId}</span>`, `<span class="support-chip">${messages.length} 条消息</span>`];
+  if (thread.username) {
+    headerTags.push(`<span class="support-chip">@${escapeHTML(thread.username)}</span>`);
+  }
+  if (thread.phone) {
+    headerTags.push(`<span class="support-chip">${escapeHTML(thread.phone)}</span>`);
+  }
+
+  elements.supportThreadHeader.innerHTML = `
+    <div class="support-thread-head">
+      <div class="support-thread-avatar large">${escapeHTML(getSupportInitials(displayName, thread.userId))}</div>
+      <div class="support-thread-head-copy">
+        <div class="support-thread-head-top">
+          <div class="support-thread-head-title">${escapeHTML(displayName)}</div>
+          <div class="support-thread-head-meta">${escapeHTML(latestTimestamp || "刚刚更新")}</div>
+        </div>
+        <div class="support-thread-head-tags">${headerTags.join("")}</div>
+      </div>
+    </div>
+  `;
 
   elements.supportMessages.innerHTML = "";
-  if (!(detail.messages || []).length) {
-    elements.supportMessages.innerHTML = "暂无客服消息";
+  if (!messages.length) {
+    elements.supportMessages.innerHTML = `
+      <div class="support-empty-state">
+        <div class="support-empty-title">当前会话还没有消息</div>
+        <div class="support-empty-subtitle">可以直接在下方输入框回复，用户会在客户端客服号会话里收到。</div>
+      </div>
+    `;
     return;
   }
 
-  detail.messages.forEach((message) => {
+  let lastDayLabel = "";
+  messages.forEach((message) => {
+    const dayLabel = formatSupportDayLabel(message);
+    if (dayLabel && dayLabel !== lastDayLabel) {
+      const separator = document.createElement("div");
+      separator.className = "support-day-separator";
+      separator.textContent = dayLabel;
+      elements.supportMessages.appendChild(separator);
+      lastDayLabel = dayLabel;
+    }
+
+    const outgoing = message.direction === "out";
+    const senderLabel = outgoing ? "客服" : displayName;
     const item = document.createElement("div");
-    item.className = `support-message ${message.direction === "out" ? "outgoing" : "incoming"}`;
+    item.className = `support-message ${outgoing ? "outgoing" : "incoming"}`;
     item.innerHTML = `
+      <div class="support-message-avatar">${escapeHTML(outgoing ? "客" : getSupportInitials(displayName, thread.userId))}</div>
       <div class="support-message-bubble">
-        <div>${escapeHTML((message.messageText || "").trim() || "空消息")}</div>
-        <div class="support-message-meta">${formatSupportMessageTimestamp(message)}</div>
+        <div class="support-message-label">${escapeHTML(senderLabel)}</div>
+        <div class="support-message-body">${escapeHTML((message.messageText || "").trim() || "空消息")}</div>
+        <div class="support-message-meta">${escapeHTML(formatSupportMessageTimestamp(message))}</div>
       </div>
     `;
     elements.supportMessages.appendChild(item);
@@ -1397,6 +1480,7 @@ async function sendSupportReply() {
     toast("回复已发送");
     await new Promise((resolve) => window.setTimeout(resolve, 300));
     await refreshSupportPanel(true);
+    elements.supportReplyInput.focus();
   } catch (error) {
     toast(error.message || "发送客服回复失败");
   } finally {
@@ -1404,20 +1488,87 @@ async function sendSupportReply() {
   }
 }
 
-function formatSupportTimestamp(value) {
+function getSupportDisplayName(thread) {
+  if (thread && thread.displayName && String(thread.displayName).trim()) {
+    return String(thread.displayName).trim();
+  }
+  if (thread && thread.userId) {
+    return `用户 ${thread.userId}`;
+  }
+  return "未知用户";
+}
+
+function getSupportInitials(label, fallback) {
+  const text = String(label || "").trim();
+  if (text) {
+    const compact = text.replace(/\s+/g, "");
+    return compact.slice(0, 2).toUpperCase();
+  }
+  return String(fallback || "?").slice(-2);
+}
+
+function getSupportMessageDateValue(message) {
+  if (message && message.messageDate) {
+    const date = new Date(Number(message.messageDate) * 1000);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  if (message && message.createdAt) {
+    const date = new Date(message.createdAt);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  return null;
+}
+
+function formatSupportTimestamp(value, detailed = false) {
   if (!value) {
     return "";
   }
   const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const now = new Date();
+  const sameYear = date.getFullYear() === now.getFullYear();
+  const sameDay = date.toDateString() === now.toDateString();
+
+  if (detailed) {
+    return date.toLocaleString([], sameYear
+      ? { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }
+      : { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
+  if (sameDay) {
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  return date.toLocaleString([], sameYear
+    ? { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }
+    : { year: "numeric", month: "numeric", day: "numeric" });
+}
+
+function formatSupportDayLabel(message) {
+  const date = getSupportMessageDateValue(message);
+  if (!date) {
+    return "";
+  }
+
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const yesterdayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  const targetStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+  if (targetStart.getTime() === todayStart.getTime()) {
+    return "今天";
+  }
+  if (targetStart.getTime() === yesterdayStart.getTime()) {
+    return "昨天";
+  }
+
+  return date.toLocaleDateString([], { month: "numeric", day: "numeric", weekday: "short" });
 }
 
 function formatSupportMessageTimestamp(message) {
-  if (message && message.messageDate) {
-    return new Date(message.messageDate * 1000).toLocaleString();
-  }
-  if (message && message.createdAt) {
-    return formatSupportTimestamp(message.createdAt);
-  }
-  return "";
+  const date = getSupportMessageDateValue(message);
+  return date ? formatSupportTimestamp(date, true) : "";
 }

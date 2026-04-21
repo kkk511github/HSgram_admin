@@ -4,15 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HSgram Admin</title>
-    <link rel="stylesheet" href="/styles.css?v=20260421-1" />
+    <link rel="stylesheet" href="/styles.css?v=20260421-3" />
   </head>
   <body>
     <div class="layout">
       <aside class="sidebar">
         <div class="sidebar-top">
           <div class="sidebar-brand">
+            <div class="sidebar-badge">Operations Console</div>
             <h1>HSgram Admin</h1>
-            <p class="sidebar-tagline">管理后台</p>
+            <p class="sidebar-tagline">统一管理用户、风控、客服、邀请码与版本发布</p>
           </div>
 
           <nav id="sidebarNav" class="sidebar-nav hidden" aria-label="功能导航">
@@ -75,7 +76,9 @@
 
       <main class="content">
         <section id="loginView" class="card narrow login-card">
+          <div class="login-badge">后台登录</div>
           <h2>管理员登录</h2>
+          <p class="login-subtitle">统一处理用户、风控、邀请码、客服消息与安装包发布。</p>
           <form id="loginForm" class="stack">
             <label>
               用户名
@@ -91,6 +94,7 @@
 
         <div id="dashboardView" class="dashboard-root hidden">
           <header class="content-header">
+            <div class="content-header-meta">HSgram 运营后台</div>
             <h2 id="contentTitle">用户管理</h2>
             <p id="contentSubtitle" class="content-subtitle muted">搜索与处理用户账号、会话与审计</p>
           </header>
@@ -256,30 +260,38 @@
 
           <div id="panelSupport" class="panel hidden" data-panel="support">
             <section class="card support-card">
-              <div class="section-title">客服消息</div>
-              <div class="muted">用户点击“联系客服”后，会打开客服号会话，消息会自动同步到这里。</div>
-              <div class="action-row compact">
-                <button id="supportRefreshButton" class="secondary">刷新会话</button>
-                <div id="supportStatusText" class="muted"></div>
+              <div class="support-overview">
+                <div class="stack support-overview-copy">
+                  <div class="section-title">客服消息</div>
+                  <div class="muted">用户点击“联系客服”后，会打开客服号会话，消息会自动同步到这里。</div>
+                </div>
+                <div class="support-overview-actions">
+                  <div id="supportStatusText" class="muted support-status-line"></div>
+                  <button id="supportRefreshButton" class="secondary">刷新会话</button>
+                </div>
               </div>
 
-              <div class="support-grid">
-                <div class="stack">
-                  <div class="section-title minor">会话列表</div>
-                  <div id="supportThreadsList" class="list"></div>
-                </div>
+              <div class="support-shell">
+                <aside class="support-sidebar" aria-label="客服会话列表">
+                  <div class="support-sidebar-header">
+                    <div class="section-title minor">会话列表</div>
+                    <div class="muted">按最近消息时间排序，优先处理未读会话。</div>
+                  </div>
+                  <div id="supportThreadsList" class="support-thread-list list"></div>
+                </aside>
 
-                <div class="stack">
+                <section class="support-main">
                   <div id="supportThreadHeader" class="support-thread-header muted">选择左侧会话查看客服对话。</div>
                   <div id="supportMessages" class="support-conversation empty">暂无客服消息</div>
-                  <label>
-                    回复内容
+                  <div class="support-composer">
+                    <label class="support-composer-label" for="supportReplyInput">回复内容</label>
                     <textarea id="supportReplyInput" rows="4" placeholder="输入要回复给用户的内容"></textarea>
-                  </label>
-                  <div class="action-row compact">
-                    <button id="supportReplyButton">发送回复</button>
+                    <div class="support-composer-actions">
+                      <div class="muted support-composer-hint">Enter 发送，Shift + Enter 换行</div>
+                      <button id="supportReplyButton">发送回复</button>
+                    </div>
                   </div>
-                </div>
+                </section>
               </div>
             </section>
           </div>
@@ -438,6 +450,6 @@
     </div>
 
     <div id="toast" class="toast hidden"></div>
-    <script src="/app.js?v=20260421-1" defer></script>
+    <script src="/app.js?v=20260421-3" defer></script>
   </body>
 </html>
