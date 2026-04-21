@@ -63,10 +63,29 @@ func (h *Handler) handleInviteCodeSettings(w http.ResponseWriter, r *http.Reques
 
 	switch r.Method {
 	case http.MethodGet:
-		settings, err := h.invites.GetSettings(r.Context())
+		settings, found, err := h.store.GetInviteCodeSettings(r.Context())
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "load invite settings failed")
 			return
+		}
+		if found {
+			writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: settings})
+			return
+		}
+
+		cacheSettings, err := h.invites.GetSettings(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "load invite settings failed")
+			return
+		}
+		if cacheSettings.UpdatedAt != 0 {
+			if persisted, err := h.store.SaveInviteCodeSettings(r.Context(), cacheSettings.Enabled); err == nil {
+				settings = persisted
+			} else {
+				settings = store.InviteCodeSettingsRecord{Enabled: cacheSettings.Enabled, UpdatedAt: cacheSettings.UpdatedAt}
+			}
+		} else {
+			settings = store.InviteCodeSettingsRecord{Enabled: cacheSettings.Enabled, UpdatedAt: cacheSettings.UpdatedAt}
 		}
 		writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: settings})
 	case http.MethodPost:
@@ -78,10 +97,18 @@ func (h *Handler) handleInviteCodeSettings(w http.ResponseWriter, r *http.Reques
 			return
 		}
 
-		settings, err := h.invites.UpdateSettings(r.Context(), request.Enabled)
+		settings, err := h.store.SaveInviteCodeSettings(r.Context(), request.Enabled)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "save invite settings failed")
 			return
+		}
+		cacheSettings, err := h.invites.UpdateSettings(r.Context(), request.Enabled)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "save invite settings failed")
+			return
+		}
+		if cacheSettings.UpdatedAt > settings.UpdatedAt {
+			settings.UpdatedAt = cacheSettings.UpdatedAt
 		}
 
 		_ = h.store.CreateAuditLog(r.Context(), admin, "invite_code.settings.update", 0, map[string]any{

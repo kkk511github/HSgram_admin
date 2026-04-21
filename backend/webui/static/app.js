@@ -2,6 +2,7 @@ const PANEL_META = {
   users: { title: "用户管理", subtitle: "搜索与处理用户账号、会话与审计" },
   risk: { title: "风控策略", subtitle: "配置踢下线后的登录限制，以及同 IP 注册上限" },
   invites: { title: "邀请码", subtitle: "生成邀请码并查看实时使用记录" },
+  support: { title: "客服消息", subtitle: "统一查看用户咨询并通过客服号直接回复" },
   releases: { title: "安装包发布", subtitle: "上传 Android / PC 安装包并发布为当前最新版本" },
   broadcast: { title: "系统广播", subtitle: "通过系统通知号向用户发送广播消息" },
 };
@@ -9,7 +10,7 @@ const PANEL_META = {
 const state = {
   token: localStorage.getItem("hsgram_admin_token") || "",
   admin: null,
-  features: { broadcasts: false },
+  features: { broadcasts: false, support: true },
   activePanel: "users",
   page: 1,
   pageSize: 20,
@@ -31,17 +32,22 @@ const state = {
   inviteCodes: [],
   selectedInviteCode: null,
   selectedInviteDetail: null,
+  supportThreads: [],
+  selectedSupportUserId: null,
+  selectedSupportThread: null,
 };
 
 const elements = {
   loginView: document.getElementById("loginView"),
   dashboardView: document.getElementById("dashboardView"),
   sidebarNav: document.getElementById("sidebarNav"),
+  navSupport: document.getElementById("navSupport"),
   contentTitle: document.getElementById("contentTitle"),
   contentSubtitle: document.getElementById("contentSubtitle"),
   panelUsers: document.getElementById("panelUsers"),
   panelRisk: document.getElementById("panelRisk"),
   panelInvites: document.getElementById("panelInvites"),
+  panelSupport: document.getElementById("panelSupport"),
   panelReleases: document.getElementById("panelReleases"),
   panelBroadcast: document.getElementById("panelBroadcast"),
   sessionPanel: document.getElementById("sessionPanel"),
@@ -82,6 +88,13 @@ const elements = {
   inviteDetailList: document.getElementById("inviteDetailList"),
   inviteEnableButton: document.getElementById("inviteEnableButton"),
   inviteDisableButton: document.getElementById("inviteDisableButton"),
+  supportRefreshButton: document.getElementById("supportRefreshButton"),
+  supportStatusText: document.getElementById("supportStatusText"),
+  supportThreadsList: document.getElementById("supportThreadsList"),
+  supportThreadHeader: document.getElementById("supportThreadHeader"),
+  supportMessages: document.getElementById("supportMessages"),
+  supportReplyInput: document.getElementById("supportReplyInput"),
+  supportReplyButton: document.getElementById("supportReplyButton"),
   auditLogsList: document.getElementById("auditLogsList"),
   broadcastDisabledNotice: document.getElementById("broadcastDisabledNotice"),
   broadcastTargetType: document.getElementById("broadcastTargetType"),
@@ -116,6 +129,8 @@ const elements = {
   toast: document.getElementById("toast"),
 };
 
+let supportPollTimer = null;
+
 elements.loginForm.addEventListener("submit", onLogin);
 elements.logoutButton.addEventListener("click", logout);
 
@@ -140,6 +155,8 @@ elements.inviteCreateButton.addEventListener("click", createInviteCode);
 elements.inviteRefreshButton.addEventListener("click", () => refreshInvitePanel().catch((error) => toast(error.message || "加载邀请码失败")));
 elements.inviteEnableButton.addEventListener("click", () => updateInviteCodeEnabled(true));
 elements.inviteDisableButton.addEventListener("click", () => updateInviteCodeEnabled(false));
+elements.supportRefreshButton.addEventListener("click", () => refreshSupportPanel().catch((error) => toast(error.message || "加载客服消息失败")));
+elements.supportReplyButton.addEventListener("click", sendSupportReply);
 elements.broadcastTargetType.addEventListener("change", syncBroadcastTargetFields);
 elements.broadcastPreviewButton.addEventListener("click", previewBroadcast);
 elements.broadcastSendButton.addEventListener("click", sendBroadcast);
@@ -163,7 +180,7 @@ async function bootstrap() {
   try {
     const response = await api("/api/admin/me");
     state.admin = response.data.admin;
-    state.features = response.data.features || { broadcasts: false };
+    state.features = normalizeFeatures(response.data.features);
     renderLoggedIn();
     await loadUsers();
     await refreshRiskPanel();
@@ -195,7 +212,7 @@ async function onLogin(event) {
 
     state.token = response.data.token;
     state.admin = response.data.admin;
-    state.features = response.data.features || { broadcasts: false };
+    state.features = normalizeFeatures(response.data.features);
     localStorage.setItem("hsgram_admin_token", state.token);
 
     renderLoggedIn();
@@ -219,7 +236,7 @@ async function onLogin(event) {
 function logout() {
   state.token = "";
   state.admin = null;
-  state.features = { broadcasts: false };
+  state.features = normalizeFeatures();
   state.activePanel = "users";
   state.users = [];
   state.selectedUserId = null;
@@ -233,6 +250,10 @@ function logout() {
   state.inviteCodes = [];
   state.selectedInviteCode = null;
   state.selectedInviteDetail = null;
+  state.supportThreads = [];
+  state.selectedSupportUserId = null;
+  state.selectedSupportThread = null;
+  stopSupportPolling();
   localStorage.removeItem("hsgram_admin_token");
   renderLoggedOut();
 }
@@ -245,7 +266,7 @@ function renderLoggedOut() {
 }
 
 function setActivePanel(panel) {
-  const allowed = ["users", "risk", "invites", "releases", "broadcast"];
+  const allowed = ["users", "risk", "invites", "support", "releases", "broadcast"];
   const id = allowed.includes(panel) ? panel : "users";
   state.activePanel = id;
 
@@ -256,12 +277,19 @@ function setActivePanel(panel) {
   elements.panelUsers.classList.toggle("hidden", id !== "users");
   elements.panelRisk.classList.toggle("hidden", id !== "risk");
   elements.panelInvites.classList.toggle("hidden", id !== "invites");
+  elements.panelSupport.classList.toggle("hidden", id !== "support");
   elements.panelReleases.classList.toggle("hidden", id !== "releases");
   elements.panelBroadcast.classList.toggle("hidden", id !== "broadcast");
 
   const meta = PANEL_META[id] || PANEL_META.users;
   elements.contentTitle.textContent = meta.title;
   elements.contentSubtitle.textContent = meta.subtitle;
+
+  if (id === "support") {
+    activateSupportPanel().catch((error) => toast(error.message || "加载客服消息失败"));
+  } else {
+    stopSupportPolling();
+  }
 }
 
 function renderLoggedIn() {
@@ -1200,4 +1228,196 @@ function toOptionalBool(value) {
     return false;
   }
   return null;
+}
+
+
+function normalizeFeatures(features) {
+  return {
+    broadcasts: false,
+    support: true,
+    ...(features || {}),
+  };
+}
+
+function stopSupportPolling() {
+  if (supportPollTimer) {
+    window.clearInterval(supportPollTimer);
+    supportPollTimer = null;
+  }
+}
+
+function startSupportPolling() {
+  stopSupportPolling();
+  if (!state.token || state.activePanel !== "support") {
+    return;
+  }
+  supportPollTimer = window.setInterval(() => {
+    refreshSupportPanel(true).catch(() => {});
+  }, 5000);
+}
+
+async function activateSupportPanel() {
+  await refreshSupportPanel(true);
+  startSupportPolling();
+}
+
+async function refreshSupportPanel(silent = false) {
+  const response = await api("/api/admin/support/threads");
+  state.supportThreads = response.data || [];
+
+  if (state.selectedSupportUserId && !state.supportThreads.some((thread) => thread.userId === state.selectedSupportUserId)) {
+    state.selectedSupportUserId = null;
+    state.selectedSupportThread = null;
+  }
+  if (!state.selectedSupportUserId && state.supportThreads.length) {
+    state.selectedSupportUserId = state.supportThreads[0].userId;
+  }
+
+  renderSupportThreads();
+
+  if (state.selectedSupportUserId) {
+    const detailResponse = await api(`/api/admin/support/threads/${state.selectedSupportUserId}`);
+    state.selectedSupportThread = detailResponse.data;
+    renderSupportThreads();
+    renderSupportDetail();
+  } else {
+    state.selectedSupportThread = null;
+    renderSupportDetail();
+  }
+
+  if (!silent) {
+    elements.supportStatusText.textContent = state.supportThreads.length
+      ? `已载入 ${state.supportThreads.length} 个客服会话`
+      : "暂无客服消息";
+  }
+}
+
+function renderSupportThreads() {
+  elements.supportThreadsList.innerHTML = "";
+
+  if (!state.supportThreads.length) {
+    elements.supportThreadsList.innerHTML = `<div class="muted">暂时还没有用户咨询。</div>`;
+    return;
+  }
+
+  state.supportThreads.forEach((thread) => {
+    const item = document.createElement("div");
+    item.className = "list-item support-thread-item";
+    item.classList.toggle("selected", thread.userId === state.selectedSupportUserId);
+
+    const lastText = (thread.lastMessageText || "").trim() || "空消息";
+    const unreadBadge = thread.unreadCount > 0 ? `<span class="support-unread">${thread.unreadCount}</span>` : "";
+    const subline = [thread.username ? `@${escapeHTML(thread.username)}` : "", thread.phone ? escapeHTML(thread.phone) : ""]
+      .filter(Boolean)
+      .join(" | ");
+
+    item.innerHTML = `
+      <div class="support-thread-row">
+        <div class="list-item-title">${escapeHTML(thread.displayName || `用户 ${thread.userId}`)}</div>
+        <div class="support-thread-meta">${formatSupportTimestamp(thread.lastMessageAt)}</div>
+      </div>
+      <div class="support-thread-subtitle">ID: ${thread.userId}${subline ? ` | ${subline}` : ""}</div>
+      <div class="support-thread-row">
+        <div class="support-thread-preview">${escapeHTML(lastText.slice(0, 80))}</div>
+        ${unreadBadge}
+      </div>
+    `;
+    item.addEventListener("click", () => {
+      state.selectedSupportUserId = thread.userId;
+      renderSupportThreads();
+      refreshSupportPanel(true).catch((error) => toast(error.message || "加载客服消息失败"));
+    });
+    elements.supportThreadsList.appendChild(item);
+  });
+}
+
+function renderSupportDetail() {
+  const detail = state.selectedSupportThread;
+  const hasThread = !!(detail && detail.thread);
+
+  elements.supportReplyInput.disabled = !hasThread;
+  elements.supportReplyButton.disabled = !hasThread;
+  elements.supportMessages.classList.toggle("empty", !hasThread || !(detail.messages || []).length);
+
+  if (!hasThread) {
+    elements.supportThreadHeader.textContent = "选择左侧会话查看客服对话。";
+    elements.supportMessages.innerHTML = "暂无客服消息";
+    return;
+  }
+
+  const thread = detail.thread;
+  const headerParts = [
+    `${thread.displayName || `用户 ${thread.userId}`} (${thread.userId})`,
+    thread.username ? `@${thread.username}` : "",
+    thread.phone || "",
+  ].filter(Boolean);
+  elements.supportThreadHeader.textContent = headerParts.join(" | ");
+
+  elements.supportMessages.innerHTML = "";
+  if (!(detail.messages || []).length) {
+    elements.supportMessages.innerHTML = "暂无客服消息";
+    return;
+  }
+
+  detail.messages.forEach((message) => {
+    const item = document.createElement("div");
+    item.className = `support-message ${message.direction === "out" ? "outgoing" : "incoming"}`;
+    item.innerHTML = `
+      <div class="support-message-bubble">
+        <div>${escapeHTML((message.messageText || "").trim() || "空消息")}</div>
+        <div class="support-message-meta">${formatSupportMessageTimestamp(message)}</div>
+      </div>
+    `;
+    elements.supportMessages.appendChild(item);
+  });
+
+  elements.supportMessages.scrollTop = elements.supportMessages.scrollHeight;
+}
+
+async function sendSupportReply() {
+  if (!state.selectedSupportUserId) {
+    toast("请先选择一个客服会话");
+    return;
+  }
+
+  const message = elements.supportReplyInput.value.trim();
+  if (!message) {
+    toast("请输入回复内容");
+    return;
+  }
+
+  elements.supportReplyButton.disabled = true;
+  try {
+    await api(`/api/admin/support/threads/${state.selectedSupportUserId}/reply`, {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    });
+    elements.supportReplyInput.value = "";
+    elements.supportStatusText.textContent = "客服回复已发送";
+    toast("回复已发送");
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    await refreshSupportPanel(true);
+  } catch (error) {
+    toast(error.message || "发送客服回复失败");
+  } finally {
+    elements.supportReplyButton.disabled = !state.selectedSupportUserId;
+  }
+}
+
+function formatSupportTimestamp(value) {
+  if (!value) {
+    return "";
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
+}
+
+function formatSupportMessageTimestamp(message) {
+  if (message && message.messageDate) {
+    return new Date(message.messageDate * 1000).toLocaleString();
+  }
+  if (message && message.createdAt) {
+    return formatSupportTimestamp(message.createdAt);
+  }
+  return "";
 }

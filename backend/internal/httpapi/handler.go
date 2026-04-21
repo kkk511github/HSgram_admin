@@ -18,6 +18,7 @@ import (
 	"hsgram-admin/backend/internal/broadcast"
 	"hsgram-admin/backend/internal/gatewayrpc"
 	"hsgram-admin/backend/internal/invitecodes"
+	"hsgram-admin/backend/internal/messenger"
 	"hsgram-admin/backend/internal/risk"
 	"hsgram-admin/backend/internal/statusrpc"
 	"hsgram-admin/backend/internal/store"
@@ -35,6 +36,7 @@ type Handler struct {
 	gateway      *gatewayrpc.Client
 	risk         *risk.Service
 	invites      *invitecodes.Service
+	msg          *messenger.Client
 	updates      UpdateConfig
 	web          http.Handler
 	releases     http.Handler
@@ -49,9 +51,10 @@ type apiResponse struct {
 
 type featureFlags struct {
 	Broadcasts bool `json:"broadcasts"`
+	Support    bool `json:"support"`
 }
 
-func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Service, authsessions *authsessionrpc.Client, syncClient *syncrpc.Client, statusClient *statusrpc.Client, gatewayClient *gatewayrpc.Client, riskService *risk.Service, inviteService *invitecodes.Service, updates UpdateConfig) http.Handler {
+func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Service, authsessions *authsessionrpc.Client, syncClient *syncrpc.Client, statusClient *statusrpc.Client, gatewayClient *gatewayrpc.Client, riskService *risk.Service, inviteService *invitecodes.Service, msgClient *messenger.Client, updates UpdateConfig) http.Handler {
 	handler := &Handler{
 		tokens:       tokens,
 		store:        userStore,
@@ -62,6 +65,7 @@ func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Ser
 		gateway:      gatewayClient,
 		risk:         riskService,
 		invites:      inviteService,
+		msg:          msgClient,
 		updates:      updates,
 		web:          webui.NewHandler(),
 		releases:     http.StripPrefix("/releases/", http.FileServer(http.Dir(updates.ReleasesDir))),
@@ -84,6 +88,8 @@ func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Ser
 	mux.Handle("/api/admin/invite-codes", handler.requireSuperAdmin(handler.handleInviteCodes))
 	mux.Handle("/api/admin/invite-code-settings", handler.requireSuperAdmin(handler.handleInviteCodeSettings))
 	mux.Handle("/api/admin/invite-codes/", handler.requireSuperAdmin(handler.handleInviteCodeRoutes))
+	mux.Handle("/api/admin/support/threads", handler.requireAuth(handler.handleSupportThreads))
+	mux.Handle("/api/admin/support/threads/", handler.requireAuth(handler.handleSupportThreadRoutes))
 	mux.Handle("/api/admin/broadcasts/preview", handler.requireSuperAdmin(handler.handleBroadcastPreview))
 	mux.Handle("/api/admin/broadcasts", handler.requireSuperAdmin(handler.handleBroadcastRoutes))
 	mux.Handle("/api/admin/broadcasts/", handler.requireSuperAdmin(handler.handleBroadcastRoutes))
@@ -539,6 +545,7 @@ func (h *Handler) requireSuperAdmin(next func(http.ResponseWriter, *http.Request
 func (h *Handler) features() featureFlags {
 	return featureFlags{
 		Broadcasts: h.broadcasts != nil,
+		Support:    true,
 	}
 }
 

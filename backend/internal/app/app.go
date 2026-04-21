@@ -50,6 +50,18 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		_ = userStore.Close()
 		return nil, err
 	}
+	if err := userStore.EnsureRuntimeSettingsSchema(ctx); err != nil {
+		_ = userStore.Close()
+		return nil, err
+	}
+	if err := userStore.EnsureSupportSchema(ctx); err != nil {
+		_ = userStore.Close()
+		return nil, err
+	}
+	if err := userStore.EnsureSupportSystemUser(ctx); err != nil {
+		_ = userStore.Close()
+		return nil, err
+	}
 	if err := userStore.EnsureReleaseSchema(ctx); err != nil {
 		_ = userStore.Close()
 		return nil, err
@@ -64,6 +76,34 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	riskService := risk.New(kvStore)
 	inviteService := invitecodes.New(kvStore)
 	var msgClient *messenger.Client
+	if cfg.MsgRPCAddr != "" {
+		msgClient, err = messenger.New(cfg.MsgRPCAddr)
+		if err != nil {
+			_ = userStore.Close()
+			return nil, err
+		}
+	} else {
+		log.Printf("admin-api: ADMIN_MSG_RPC_ADDR is empty; support reply and broadcast APIs stay disabled until msg RPC is set")
+	}
+	if persistedInviteSettings, found, err := userStore.GetInviteCodeSettings(ctx); err != nil {
+		if msgClient != nil {
+			_ = msgClient.Close()
+		}
+		_ = userStore.Close()
+		return nil, err
+	} else if found {
+		if _, err = inviteService.UpdateSettings(ctx, persistedInviteSettings.Enabled); err != nil {
+			if msgClient != nil {
+				_ = msgClient.Close()
+			}
+			_ = userStore.Close()
+			return nil, err
+		}
+	} else if currentInviteSettings, err := inviteService.GetSettings(ctx); err == nil && currentInviteSettings.UpdatedAt != 0 {
+		if _, err := userStore.SaveInviteCodeSettings(ctx, currentInviteSettings.Enabled); err != nil {
+			log.Printf("admin-api: backfill invite settings failed: %v", err)
+		}
+	}
 	var authsessionClient *authsessionrpc.Client
 	var syncClient *syncrpc.Client
 	var statusClient *statusrpc.Client
@@ -79,12 +119,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 			return nil, err
 		}
 
-		if cfg.MsgRPCAddr != "" {
-			msgClient, err = messenger.New(cfg.MsgRPCAddr)
-			if err != nil {
-				_ = userStore.Close()
-				return nil, err
-			}
+		if msgClient != nil {
 			broadcaster = broadcast.New(userStore, msgClient)
 		} else {
 			log.Printf("admin-api: ADMIN_ENABLE_BROADCASTS is true but ADMIN_MSG_RPC_ADDR is empty; broadcast API stays disabled until msg RPC is set")
@@ -161,7 +196,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		log.Printf("admin-api: ADMIN_GATEWAY_RPC_ADDR is empty; online socket disconnect will be disabled")
 	}
 
-	handler := httpapi.New(tokenMgr, userStore, broadcaster, authsessionClient, syncClient, statusClient, gatewayClient, riskService, inviteService, httpapi.UpdateConfig{
+	handler := httpapi.New(tokenMgr, userStore, broadcaster, authsessionClient, syncClient, statusClient, gatewayClient, riskService, inviteService, msgClient, httpapi.UpdateConfig{
 		ReleasesDir:   cfg.ReleasesDir,
 		PublicBaseURL: cfg.PublicBaseURL,
 	})

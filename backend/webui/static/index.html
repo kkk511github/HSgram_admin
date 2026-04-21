@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HSgram Admin</title>
-    <link rel="stylesheet" href="/styles.css?v=20260414-2" />
+    <link rel="stylesheet" href="/styles.css?v=20260421-1" />
   </head>
   <body>
     <div class="layout">
@@ -37,6 +37,13 @@
                 <span class="nav-body">
                   <span class="nav-label">邀请码</span>
                   <span class="nav-desc">生成邀请码并查看使用记录</span>
+                </span>
+              </button>
+              <button type="button" class="nav-item" data-panel="support" id="navSupport">
+                <span class="nav-icon" aria-hidden="true">☎</span>
+                <span class="nav-body">
+                  <span class="nav-label">客服消息</span>
+                  <span class="nav-desc">查看用户咨询并直接回复</span>
                 </span>
               </button>
               <button type="button" class="nav-item" data-panel="releases" id="navReleases">
@@ -247,6 +254,36 @@
             </section>
           </div>
 
+          <div id="panelSupport" class="panel hidden" data-panel="support">
+            <section class="card support-card">
+              <div class="section-title">客服消息</div>
+              <div class="muted">用户点击“联系客服”后，会打开客服号会话，消息会自动同步到这里。</div>
+              <div class="action-row compact">
+                <button id="supportRefreshButton" class="secondary">刷新会话</button>
+                <div id="supportStatusText" class="muted"></div>
+              </div>
+
+              <div class="support-grid">
+                <div class="stack">
+                  <div class="section-title minor">会话列表</div>
+                  <div id="supportThreadsList" class="list"></div>
+                </div>
+
+                <div class="stack">
+                  <div id="supportThreadHeader" class="support-thread-header muted">选择左侧会话查看客服对话。</div>
+                  <div id="supportMessages" class="support-conversation empty">暂无客服消息</div>
+                  <label>
+                    回复内容
+                    <textarea id="supportReplyInput" rows="4" placeholder="输入要回复给用户的内容"></textarea>
+                  </label>
+                  <div class="action-row compact">
+                    <button id="supportReplyButton">发送回复</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
           <div id="panelReleases" class="panel hidden" data-panel="releases">
             <section class="card release-card">
               <div class="section-title">安装包发布</div>
@@ -401,6 +438,6 @@
     </div>
 
     <div id="toast" class="toast hidden"></div>
-    <script src="/app.js?v=20260414-2" defer></script>
+    <script src="/app.js?v=20260421-1" defer></script>
   </body>
 </html>

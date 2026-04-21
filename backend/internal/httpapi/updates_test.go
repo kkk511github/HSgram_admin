@@ -20,7 +20,7 @@ func TestAndroidLatestManifestUsesPublicBaseURL(t *testing.T) {
   "changelog": "bug fixes"
 }`)
 
-	handler := New(nil, nil, nil, nil, nil, nil, nil, nil, nil, UpdateConfig{
+	handler := New(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, UpdateConfig{
 		ReleasesDir:   releasesDir,
 		PublicBaseURL: "https://admin.example.com",
 	})
@@ -53,7 +53,7 @@ func TestTDesktopCurrentUsesRequestHostForRelativeURL(t *testing.T) {
   "download_url": "releases/pc/HSgram-pc-2.0.0.exe"
 }`)
 
-	handler := New(nil, nil, nil, nil, nil, nil, nil, nil, nil, UpdateConfig{
+	handler := New(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, UpdateConfig{
 		ReleasesDir: releasesDir,
 	})
 
