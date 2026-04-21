@@ -11,6 +11,11 @@
 		respond "ok" 200
 	}
 
+	@invite path_regexp invite ^/\+([A-Za-z0-9_-]+)$
+	handle @invite {
+		redir tg://join?invite={re.invite.1}
+	}
+
 	reverse_proxy admin-api:8088 {
 		transport http {
 			read_timeout 30m
