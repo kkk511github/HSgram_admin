@@ -4,70 +4,55 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HSgram Admin</title>
-    <link rel="stylesheet" href="/styles.css?v=20260421-3" />
+    <link rel="stylesheet" href="/styles.css?v=20260421-4" />
   </head>
   <body>
     <div class="layout">
       <aside class="sidebar">
         <div class="sidebar-top">
           <div class="sidebar-brand">
-            <div class="sidebar-badge">Operations Console</div>
-            <h1>HSgram Admin</h1>
-            <p class="sidebar-tagline">统一管理用户、风控、客服、邀请码与版本发布</p>
+            <div class="sidebar-badge">HSgram Admin</div>
+            <h1>运营工作台</h1>
+            <p class="sidebar-tagline">用户、风控、邀请码、客服、版本发布，在同一个后台里处理干净。</p>
           </div>
 
           <nav id="sidebarNav" class="sidebar-nav hidden" aria-label="功能导航">
-            <div class="nav-section">
-              <span class="nav-section-title">功能模块</span>
-              <button type="button" class="nav-item active" data-panel="users" id="navUsers">
-                <span class="nav-icon" aria-hidden="true">◎</span>
-                <span class="nav-body">
-                  <span class="nav-label">用户管理</span>
-                  <span class="nav-desc">搜索、封禁、会话与日志</span>
-                </span>
-              </button>
-              <button type="button" class="nav-item" data-panel="risk" id="navRisk">
-                <span class="nav-icon" aria-hidden="true">*</span>
-                <span class="nav-body">
-                  <span class="nav-label">风控策略</span>
-                  <span class="nav-desc">踢下线时长与注册 IP 限额</span>
-                </span>
-              </button>
-              <button type="button" class="nav-item" data-panel="invites" id="navInvites">
-                <span class="nav-icon" aria-hidden="true">#</span>
-                <span class="nav-body">
-                  <span class="nav-label">邀请码</span>
-                  <span class="nav-desc">生成邀请码并查看使用记录</span>
-                </span>
-              </button>
-              <button type="button" class="nav-item" data-panel="support" id="navSupport">
-                <span class="nav-icon" aria-hidden="true">☎</span>
-                <span class="nav-body">
-                  <span class="nav-label">客服消息</span>
-                  <span class="nav-desc">查看用户咨询并直接回复</span>
-                </span>
-              </button>
-              <button type="button" class="nav-item" data-panel="releases" id="navReleases">
-                <span class="nav-icon" aria-hidden="true">▣</span>
-                <span class="nav-body">
-                  <span class="nav-label">安装包发布</span>
-                  <span class="nav-desc">OTA 上传与版本发布</span>
-                </span>
-              </button>
-              <button type="button" class="nav-item" data-panel="broadcast" id="navBroadcast">
-                <span class="nav-icon" aria-hidden="true">✉</span>
-                <span class="nav-body">
-                  <span class="nav-label">系统广播</span>
-                  <span class="nav-desc">向用户推送通知消息</span>
-                </span>
-              </button>
-            </div>
+            <button type="button" class="nav-item active" data-panel="users" id="navUsers">
+              <span class="nav-kicker">用户</span>
+              <span class="nav-label">用户管理</span>
+              <span class="nav-desc">搜索账号、查看会话、封禁与踢下线</span>
+            </button>
+            <button type="button" class="nav-item" data-panel="risk" id="navRisk">
+              <span class="nav-kicker">策略</span>
+              <span class="nav-label">风控策略</span>
+              <span class="nav-desc">登录限制、注册阈值、日常观察</span>
+            </button>
+            <button type="button" class="nav-item" data-panel="invites" id="navInvites">
+              <span class="nav-kicker">注册</span>
+              <span class="nav-label">邀请码</span>
+              <span class="nav-desc">生成邀请码并查看使用记录</span>
+            </button>
+            <button type="button" class="nav-item" data-panel="support" id="navSupport">
+              <span class="nav-kicker">客服</span>
+              <span class="nav-label">客服消息</span>
+              <span class="nav-desc">按用户聚合会话，直接在这里回复</span>
+            </button>
+            <button type="button" class="nav-item" data-panel="releases" id="navReleases">
+              <span class="nav-kicker">发布</span>
+              <span class="nav-label">安装包发布</span>
+              <span class="nav-desc">上传版本、查看发布历史、推送通知</span>
+            </button>
+            <button type="button" class="nav-item" data-panel="broadcast" id="navBroadcast">
+              <span class="nav-kicker">通知</span>
+              <span class="nav-label">系统广播</span>
+              <span class="nav-desc">面向用户发送批量通知消息</span>
+            </button>
           </nav>
         </div>
 
         <div class="sidebar-bottom">
           <div id="sessionPanel" class="session-panel hidden">
-            <div class="label">当前管理员</div>
+            <div class="session-label">当前管理员</div>
             <div id="adminName" class="admin-name"></div>
             <button id="logoutButton" class="secondary sidebar-logout">退出登录</button>
           </div>
@@ -75,32 +60,75 @@
       </aside>
 
       <main class="content">
-        <section id="loginView" class="card narrow login-card">
-          <div class="login-badge">后台登录</div>
-          <h2>管理员登录</h2>
-          <p class="login-subtitle">统一处理用户、风控、邀请码、客服消息与安装包发布。</p>
-          <form id="loginForm" class="stack">
-            <label>
-              用户名
-              <input id="usernameInput" name="username" autocomplete="username" required />
-            </label>
-            <label>
-              密码
-              <input id="passwordInput" name="password" type="password" autocomplete="current-password" required />
-            </label>
-            <button type="submit">登录</button>
-          </form>
+        <section id="loginView" class="login-shell">
+          <div class="login-panel card">
+            <div class="login-badge">后台登录</div>
+            <h2>进入 HSgram Admin</h2>
+            <p class="login-subtitle">把日常运营、客服对话、版本发布和风控动作放在一处完成。</p>
+            <form id="loginForm" class="stack">
+              <label>
+                用户名
+                <input id="usernameInput" name="username" autocomplete="username" required />
+              </label>
+              <label>
+                密码
+                <input id="passwordInput" name="password" type="password" autocomplete="current-password" required />
+              </label>
+              <button type="submit">登录</button>
+            </form>
+          </div>
+
+          <div class="login-aside card">
+            <div class="login-aside-kicker">今日重点</div>
+            <div class="login-aside-title">先看用户，再看客服，再推进发布。</div>
+            <div class="login-aside-list">
+              <div class="login-aside-item">
+                <div class="login-aside-heading">用户处理</div>
+                <div class="muted">快速搜索账号、检查状态、执行封禁与踢下线。</div>
+              </div>
+              <div class="login-aside-item">
+                <div class="login-aside-heading">客服会话</div>
+                <div class="muted">按用户查看消息，像聊天一样回复，不用来回切。</div>
+              </div>
+              <div class="login-aside-item">
+                <div class="login-aside-heading">版本发布</div>
+                <div class="muted">上传安装包、确认版本号、决定是否通知用户。</div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <div id="dashboardView" class="dashboard-root hidden">
-          <header class="content-header">
-            <div class="content-header-meta">HSgram 运营后台</div>
-            <h2 id="contentTitle">用户管理</h2>
-            <p id="contentSubtitle" class="content-subtitle muted">搜索与处理用户账号、会话与审计</p>
+          <header class="content-header card">
+            <div class="content-header-main">
+              <div class="content-header-meta">HSgram 运营后台</div>
+              <h2 id="contentTitle">用户管理</h2>
+              <p id="contentSubtitle" class="content-subtitle muted">搜索与处理用户账号、会话与审计</p>
+            </div>
+            <div class="content-header-notes">
+              <div class="header-note">
+                <span class="header-note-label">工作方式</span>
+                <span class="header-note-value">集中处理</span>
+              </div>
+              <div class="header-note">
+                <span class="header-note-label">客服视图</span>
+                <span class="header-note-value">按用户会话</span>
+              </div>
+              <div class="header-note">
+                <span class="header-note-label">版本发布</span>
+                <span class="header-note-value">统一入口</span>
+              </div>
+            </div>
           </header>
 
           <div id="panelUsers" class="panel" data-panel="users">
-            <div class="toolbar card">
+            <section class="toolbar card">
+              <div class="panel-heading">
+                <div>
+                  <div class="section-title">账号搜索</div>
+                  <div class="muted">按用户 ID、用户名或手机号找到目标账号。</div>
+                </div>
+              </div>
               <div class="search-row">
                 <input id="searchInput" placeholder="按用户 ID / 用户名 / 手机号搜索" />
                 <select id="restrictedFilter">
@@ -111,17 +139,20 @@
                 <button id="searchButton">搜索</button>
               </div>
               <div id="statusText" class="muted"></div>
-            </div>
+            </section>
 
             <div class="dashboard-grid">
               <section class="card">
-                <div class="section-title">用户列表</div>
+                <div class="panel-heading">
+                  <div class="section-title">用户列表</div>
+                  <div class="muted">点选左侧结果后，右边查看详情与操作。</div>
+                </div>
                 <div class="table-wrap">
                   <table>
                     <thead>
                       <tr>
                         <th>ID</th>
-                        <th>昵称</th>
+                        <th>显示名</th>
                         <th>用户名</th>
                         <th>手机号</th>
                         <th>状态</th>
@@ -138,13 +169,16 @@
               </section>
 
               <section class="card detail-card">
-                <div class="section-title">用户详情</div>
-                <div id="detailEmpty" class="muted">从列表中选择一个用户查看详情。</div>
+                <div class="panel-heading">
+                  <div class="section-title">用户详情</div>
+                  <div class="muted">封禁、解封、踢下线和查看会话都在这里。</div>
+                </div>
+                <div id="detailEmpty" class="empty-hint muted">从列表中选择一个用户查看详情。</div>
                 <div id="detailPanel" class="hidden stack">
                   <div id="detailSummary" class="detail-summary"></div>
 
                   <div class="action-row">
-                    <input id="banReasonInput" placeholder="封禁原因（可选）" />
+                    <input id="banReasonInput" placeholder="封禁原因，可留空" />
                     <button id="banButton" class="danger">封禁</button>
                     <button id="unbanButton" class="secondary">解封</button>
                     <button id="kickSessionsButton" class="secondary">踢下线</button>
@@ -166,8 +200,12 @@
 
           <div id="panelRisk" class="panel hidden" data-panel="risk">
             <section class="card release-card">
-              <div class="section-title">风控策略</div>
-              <div class="muted">统一配置踢下线后的禁止登录时长，以及单 IP 每日注册上限。</div>
+              <div class="panel-heading">
+                <div>
+                  <div class="section-title">风控策略</div>
+                  <div class="muted">统一设置踢下线后的登录限制，以及同 IP 每日注册上限。</div>
+                </div>
+              </div>
 
               <div class="release-grid">
                 <div class="stack">
@@ -177,7 +215,7 @@
                   </label>
 
                   <label>
-                    单 IP 每日最大注册账号数
+                    同 IP 每日最大注册账号数
                     <input id="riskSignupLimitInput" type="number" min="1" step="1" />
                   </label>
 
@@ -199,12 +237,16 @@
 
           <div id="panelInvites" class="panel hidden" data-panel="invites">
             <section class="card release-card">
-              <div class="section-title">邀请码</div>
-              <div class="muted">生成单次或多次邀请码，并实时查看谁已经完成注册。</div>
+              <div class="panel-heading">
+                <div>
+                  <div class="section-title">邀请码</div>
+                  <div class="muted">管理邀请码开关、生成邀请码，并追踪使用情况。</div>
+                </div>
+              </div>
 
               <div class="list-item stack">
                 <div class="section-title minor">注册开关</div>
-                <label>
+                <label class="checkbox-line">
                   <input id="inviteSignupEnabledInput" type="checkbox" />
                   启用邀请码注册
                 </label>
@@ -233,7 +275,7 @@
                     <input id="inviteNoteInput" placeholder="例如 内测群 / 合作渠道 / 代理 A" />
                   </label>
 
-                  <div class="muted">`0` 表示不限次数，建议默认使用单次邀请码。</div>
+                  <div class="muted">填 0 表示不限次数，默认更适合单次邀请码。</div>
 
                   <div class="action-row compact">
                     <button id="inviteCreateButton">生成邀请码</button>
@@ -259,13 +301,13 @@
           </div>
 
           <div id="panelSupport" class="panel hidden" data-panel="support">
-            <section class="card support-card">
-              <div class="support-overview">
-                <div class="stack support-overview-copy">
+            <section class="card support-workspace">
+              <div class="support-workspace-head">
+                <div>
                   <div class="section-title">客服消息</div>
-                  <div class="muted">用户点击“联系客服”后，会打开客服号会话，消息会自动同步到这里。</div>
+                  <div class="muted">按用户整理会话，点开即可像聊天一样查看和回复。</div>
                 </div>
-                <div class="support-overview-actions">
+                <div class="support-workspace-actions">
                   <div id="supportStatusText" class="muted support-status-line"></div>
                   <button id="supportRefreshButton" class="secondary">刷新会话</button>
                 </div>
@@ -274,14 +316,34 @@
               <div class="support-shell">
                 <aside class="support-sidebar" aria-label="客服会话列表">
                   <div class="support-sidebar-header">
-                    <div class="section-title minor">会话列表</div>
-                    <div class="muted">按最近消息时间排序，优先处理未读会话。</div>
+                    <div class="section-title minor">用户会话</div>
+                    <div class="muted">最新消息排在前面，未读优先处理。</div>
                   </div>
+
+                  <div class="support-sidebar-tools">
+                    <input id="supportSearchInput" placeholder="搜索用户、username、手机号或 ID" />
+                    <div class="support-filter-group">
+                      <button id="supportFilterAll" type="button" class="secondary support-filter active">全部会话</button>
+                      <button id="supportFilterUnread" type="button" class="secondary support-filter">仅未读</button>
+                    </div>
+                  </div>
+
+                  <div class="support-stats">
+                    <div class="support-stat">
+                      <span class="support-stat-label">显示中</span>
+                      <strong id="supportThreadCount">0</strong>
+                    </div>
+                    <div class="support-stat">
+                      <span class="support-stat-label">未读</span>
+                      <strong id="supportUnreadCount">0</strong>
+                    </div>
+                  </div>
+
                   <div id="supportThreadsList" class="support-thread-list list"></div>
                 </aside>
 
                 <section class="support-main">
-                  <div id="supportThreadHeader" class="support-thread-header muted">选择左侧会话查看客服对话。</div>
+                  <div id="supportThreadHeader" class="support-thread-header muted">选择左侧会话开始处理。</div>
                   <div id="supportMessages" class="support-conversation empty">暂无客服消息</div>
                   <div class="support-composer">
                     <label class="support-composer-label" for="supportReplyInput">回复内容</label>
@@ -292,14 +354,31 @@
                     </div>
                   </div>
                 </section>
+
+                <aside class="support-inspector">
+                  <div class="support-inspector-header">
+                    <div class="section-title minor">会话资料</div>
+                    <div class="muted">帮助你更快判断当前对话对象。</div>
+                  </div>
+                  <div id="supportThreadProfile" class="support-thread-profile">
+                    <div class="support-profile-empty">
+                      <div class="support-empty-title">先选一个会话</div>
+                      <div class="support-empty-subtitle">选中左侧用户后，这里会显示用户信息、消息数量和最近动态。</div>
+                    </div>
+                  </div>
+                </aside>
               </div>
             </section>
           </div>
 
           <div id="panelReleases" class="panel hidden" data-panel="releases">
             <section class="card release-card">
-              <div class="section-title">安装包发布</div>
-              <div class="muted">上传 Android / PC 安装包，发布为最新版本，并可选广播通知用户。</div>
+              <div class="panel-heading">
+                <div>
+                  <div class="section-title">安装包发布</div>
+                  <div class="muted">上传 Android / PC 安装包，确认版本信息，并选择是否通知用户。</div>
+                </div>
+              </div>
 
               <div class="release-grid">
                 <div class="stack">
@@ -350,7 +429,7 @@
                   <div class="section-title minor">发布详情</div>
                   <div id="releaseDetailList" class="list"></div>
 
-                  <label>
+                  <label class="checkbox-line">
                     <input id="releaseNotifyUsers" type="checkbox" />
                     发布后广播通知全体用户
                   </label>
@@ -369,10 +448,14 @@
 
           <div id="panelBroadcast" class="panel hidden" data-panel="broadcast">
             <section class="card broadcast-card">
-              <div class="section-title">系统广播</div>
-              <div class="muted">通过系统账号 `HSgram Notice` 发送普通私聊消息。</div>
+              <div class="panel-heading">
+                <div>
+                  <div class="section-title">系统广播</div>
+                  <div class="muted">通过系统账号 HSgram Notice 发送普通私聊消息。</div>
+                </div>
+              </div>
               <div id="broadcastDisabledNotice" class="notice hidden">
-                当前部署未开启广播能力。只使用用户管理时，建议保持关闭以减少对消息链路的依赖。
+                当前部署未开启广播能力。只做用户管理时，保持关闭会更轻一些。
               </div>
 
               <div class="broadcast-grid">
@@ -388,7 +471,7 @@
 
                   <label id="broadcastIdentifiersWrap" class="hidden">
                     指定用户
-                    <textarea id="broadcastIdentifiers" rows="5" placeholder="支持用户ID / 用户名 / 手机号，换行或逗号分隔"></textarea>
+                    <textarea id="broadcastIdentifiers" rows="5" placeholder="支持用户 ID / 用户名 / 手机号，换行或逗号分隔"></textarea>
                   </label>
 
                   <div id="broadcastFiltersWrap" class="hidden filter-grid">
@@ -450,6 +533,6 @@
     </div>
 
     <div id="toast" class="toast hidden"></div>
-    <script src="/app.js?v=20260421-3" defer></script>
+    <script src="/app.js?v=20260421-4" defer></script>
   </body>
 </html>

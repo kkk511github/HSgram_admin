@@ -35,6 +35,8 @@ const state = {
   supportThreads: [],
   selectedSupportUserId: null,
   selectedSupportThread: null,
+  supportSearchQuery: "",
+  supportUnreadOnly: false,
 };
 
 const elements = {
@@ -90,9 +92,15 @@ const elements = {
   inviteDisableButton: document.getElementById("inviteDisableButton"),
   supportRefreshButton: document.getElementById("supportRefreshButton"),
   supportStatusText: document.getElementById("supportStatusText"),
+  supportSearchInput: document.getElementById("supportSearchInput"),
+  supportFilterAll: document.getElementById("supportFilterAll"),
+  supportFilterUnread: document.getElementById("supportFilterUnread"),
+  supportThreadCount: document.getElementById("supportThreadCount"),
+  supportUnreadCount: document.getElementById("supportUnreadCount"),
   supportThreadsList: document.getElementById("supportThreadsList"),
   supportThreadHeader: document.getElementById("supportThreadHeader"),
   supportMessages: document.getElementById("supportMessages"),
+  supportThreadProfile: document.getElementById("supportThreadProfile"),
   supportReplyInput: document.getElementById("supportReplyInput"),
   supportReplyButton: document.getElementById("supportReplyButton"),
   auditLogsList: document.getElementById("auditLogsList"),
@@ -165,6 +173,24 @@ elements.supportReplyInput.addEventListener("keydown", (event) => {
     }
   }
 });
+if (elements.supportSearchInput) {
+  elements.supportSearchInput.addEventListener("input", () => {
+    state.supportSearchQuery = elements.supportSearchInput.value || "";
+    handleSupportFiltersChanged().catch((error) => toast(error.message || "筛选客服会话失败"));
+  });
+}
+if (elements.supportFilterAll) {
+  elements.supportFilterAll.addEventListener("click", () => {
+    state.supportUnreadOnly = false;
+    handleSupportFiltersChanged().catch((error) => toast(error.message || "筛选客服会话失败"));
+  });
+}
+if (elements.supportFilterUnread) {
+  elements.supportFilterUnread.addEventListener("click", () => {
+    state.supportUnreadOnly = true;
+    handleSupportFiltersChanged().catch((error) => toast(error.message || "筛选客服会话失败"));
+  });
+}
 elements.broadcastTargetType.addEventListener("change", syncBroadcastTargetFields);
 elements.broadcastPreviewButton.addEventListener("click", previewBroadcast);
 elements.broadcastSendButton.addEventListener("click", sendBroadcast);
@@ -1273,14 +1299,8 @@ async function refreshSupportPanel(silent = false) {
   const response = await api("/api/admin/support/threads");
   state.supportThreads = response.data || [];
 
-  if (state.selectedSupportUserId && !state.supportThreads.some((thread) => thread.userId === state.selectedSupportUserId)) {
-    state.selectedSupportUserId = null;
-    state.selectedSupportThread = null;
-  }
-  if (!state.selectedSupportUserId && state.supportThreads.length) {
-    state.selectedSupportUserId = state.supportThreads[0].userId;
-  }
-
+  syncSelectedSupportThread();
+  renderSupportStats();
   renderSupportThreads();
 
   if (state.selectedSupportUserId) {
@@ -1294,26 +1314,117 @@ async function refreshSupportPanel(silent = false) {
   }
 
   if (!silent) {
+    const visibleThreads = getVisibleSupportThreads();
     elements.supportStatusText.textContent = state.supportThreads.length
-      ? `已载入 ${state.supportThreads.length} 个客服会话`
+      ? `共 ${state.supportThreads.length} 个会话，当前显示 ${visibleThreads.length} 个`
       : "暂无客服消息";
+  }
+}
+
+function getVisibleSupportThreads() {
+  const query = String(state.supportSearchQuery || "").trim().toLowerCase();
+  return (state.supportThreads || []).filter((thread) => {
+    if (state.supportUnreadOnly && Number(thread.unreadCount || 0) <= 0) {
+      return false;
+    }
+    if (!query) {
+      return true;
+    }
+
+    const haystack = [
+      thread.userId,
+      thread.displayName,
+      thread.username,
+      thread.phone,
+      thread.lastMessageText,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return haystack.includes(query);
+  });
+}
+
+function syncSelectedSupportThread() {
+  const visibleThreads = getVisibleSupportThreads();
+
+  if (!visibleThreads.length) {
+    state.selectedSupportUserId = null;
+    state.selectedSupportThread = null;
+    return;
+  }
+
+  const selectedVisible = visibleThreads.some((thread) => thread.userId === state.selectedSupportUserId);
+  if (!selectedVisible) {
+    state.selectedSupportUserId = visibleThreads[0].userId;
+    state.selectedSupportThread = null;
+  }
+
+  if (state.selectedSupportThread && state.selectedSupportThread.thread) {
+    if (state.selectedSupportThread.thread.userId !== state.selectedSupportUserId) {
+      state.selectedSupportThread = null;
+    }
+  }
+}
+
+async function handleSupportFiltersChanged() {
+  syncSelectedSupportThread();
+  renderSupportStats();
+  renderSupportThreads();
+
+  if (!state.selectedSupportUserId) {
+    state.selectedSupportThread = null;
+    renderSupportDetail();
+    return;
+  }
+
+  const detailResponse = await api(`/api/admin/support/threads/${state.selectedSupportUserId}`);
+  state.selectedSupportThread = detailResponse.data;
+  renderSupportThreads();
+  renderSupportDetail();
+}
+
+function renderSupportStats() {
+  const visibleThreads = getVisibleSupportThreads();
+  const unreadCount = (state.supportThreads || []).reduce((total, thread) => total + Number(thread.unreadCount || 0), 0);
+
+  if (elements.supportThreadCount) {
+    elements.supportThreadCount.textContent = String(visibleThreads.length);
+  }
+  if (elements.supportUnreadCount) {
+    elements.supportUnreadCount.textContent = String(unreadCount);
+  }
+  if (elements.supportFilterAll) {
+    elements.supportFilterAll.classList.toggle("active", !state.supportUnreadOnly);
+  }
+  if (elements.supportFilterUnread) {
+    elements.supportFilterUnread.classList.toggle("active", !!state.supportUnreadOnly);
   }
 }
 
 function renderSupportThreads() {
   elements.supportThreadsList.innerHTML = "";
+  renderSupportStats();
 
-  if (!state.supportThreads.length) {
+  const visibleThreads = getVisibleSupportThreads();
+  const hasFilters = !!(String(state.supportSearchQuery || "").trim() || state.supportUnreadOnly);
+
+  if (!visibleThreads.length) {
     elements.supportThreadsList.innerHTML = `
       <div class="support-empty-state">
-        <div class="support-empty-title">暂时还没有用户咨询</div>
-        <div class="support-empty-subtitle">用户发送到客服号的消息，会按最近时间自动出现在这里。</div>
+        <div class="support-empty-title">${hasFilters ? "没有匹配的会话" : "暂时还没有用户咨询"}</div>
+        <div class="support-empty-subtitle">${
+          hasFilters
+            ? "可以清空搜索词，或者切回全部会话后再看。"
+            : "用户发到客服号的消息，会按最近时间自动出现在这里。"
+        }</div>
       </div>
     `;
     return;
   }
 
-  state.supportThreads.forEach((thread) => {
+  visibleThreads.forEach((thread) => {
     const displayName = getSupportDisplayName(thread);
     const lastText = (thread.lastMessageText || "").trim() || "空消息";
     const tags = [];
@@ -1323,7 +1434,7 @@ function renderSupportThreads() {
     if (thread.phone) {
       tags.push(`<span class="support-chip">${escapeHTML(thread.phone)}</span>`);
     }
-    const unreadBadge = thread.unreadCount > 0 ? `<span class="support-unread">${thread.unreadCount}</span>` : "";
+    const unreadBadge = Number(thread.unreadCount || 0) > 0 ? `<span class="support-unread">${thread.unreadCount}</span>` : "";
 
     const item = document.createElement("div");
     item.className = "list-item support-thread-item";
@@ -1349,17 +1460,27 @@ function renderSupportThreads() {
       </div>
     `;
 
-    const activateThread = () => {
+    const activateThread = async () => {
       state.selectedSupportUserId = thread.userId;
+      state.selectedSupportThread = null;
       renderSupportThreads();
-      refreshSupportPanel(true).catch((error) => toast(error.message || "加载客服消息失败"));
+      try {
+        const detailResponse = await api(`/api/admin/support/threads/${state.selectedSupportUserId}`);
+        state.selectedSupportThread = detailResponse.data;
+        renderSupportThreads();
+        renderSupportDetail();
+      } catch (error) {
+        toast(error.message || "加载客服消息失败");
+      }
     };
 
-    item.addEventListener("click", activateThread);
+    item.addEventListener("click", () => {
+      activateThread().catch((error) => toast(error.message || "加载客服消息失败"));
+    });
     item.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        activateThread();
+        activateThread().catch((error) => toast(error.message || "加载客服消息失败"));
       }
     });
     elements.supportThreadsList.appendChild(item);
@@ -1378,7 +1499,7 @@ function renderSupportDetail() {
 
   if (!hasThread) {
     elements.supportThreadHeader.innerHTML = `
-      <div class="support-thread-empty">
+      <div class="support-empty-state">
         <div class="support-empty-title">选择一个会话开始处理</div>
         <div class="support-empty-subtitle">左侧会显示最近联系过客服的用户，点开后即可查看完整消息并直接回复。</div>
       </div>
@@ -1386,9 +1507,10 @@ function renderSupportDetail() {
     elements.supportMessages.innerHTML = `
       <div class="support-empty-state">
         <div class="support-empty-title">这里会显示完整对话</div>
-        <div class="support-empty-subtitle">发送回复后，这里的消息会自动刷新并同步到客户端的客服号会话。</div>
+        <div class="support-empty-subtitle">发送回复后，这里的消息会自动刷新，并同步到客户端客服号会话。</div>
       </div>
     `;
+    renderSupportProfile(null);
     return;
   }
 
@@ -1402,6 +1524,9 @@ function renderSupportDetail() {
   }
   if (thread.phone) {
     headerTags.push(`<span class="support-chip">${escapeHTML(thread.phone)}</span>`);
+  }
+  if (Number(thread.unreadCount || 0) > 0) {
+    headerTags.push(`<span class="support-chip">未读 ${thread.unreadCount}</span>`);
   }
 
   elements.supportThreadHeader.innerHTML = `
@@ -1425,6 +1550,7 @@ function renderSupportDetail() {
         <div class="support-empty-subtitle">可以直接在下方输入框回复，用户会在客户端客服号会话里收到。</div>
       </div>
     `;
+    renderSupportProfile(detail);
     return;
   }
 
@@ -1444,7 +1570,7 @@ function renderSupportDetail() {
     const item = document.createElement("div");
     item.className = `support-message ${outgoing ? "outgoing" : "incoming"}`;
     item.innerHTML = `
-      <div class="support-message-avatar">${escapeHTML(outgoing ? "客" : getSupportInitials(displayName, thread.userId))}</div>
+      <div class="support-message-avatar">${escapeHTML(outgoing ? "客服" : getSupportInitials(displayName, thread.userId))}</div>
       <div class="support-message-bubble">
         <div class="support-message-label">${escapeHTML(senderLabel)}</div>
         <div class="support-message-body">${escapeHTML((message.messageText || "").trim() || "空消息")}</div>
@@ -1455,6 +1581,65 @@ function renderSupportDetail() {
   });
 
   elements.supportMessages.scrollTop = elements.supportMessages.scrollHeight;
+  renderSupportProfile(detail);
+}
+
+function renderSupportProfile(detail) {
+  if (!elements.supportThreadProfile) {
+    return;
+  }
+
+  if (!detail || !detail.thread) {
+    elements.supportThreadProfile.innerHTML = `
+      <div class="support-profile-empty">
+        <div class="support-empty-title">先选一个会话</div>
+        <div class="support-empty-subtitle">选中左侧用户后，这里会显示用户信息、消息数量和最近动态。</div>
+      </div>
+    `;
+    return;
+  }
+
+  const thread = detail.thread;
+  const messages = Array.isArray(detail.messages) ? detail.messages : [];
+  const displayName = getSupportDisplayName(thread);
+  const latestMessage = messages.length ? messages[messages.length - 1] : null;
+  const latestText = latestMessage && latestMessage.messageText ? latestMessage.messageText.trim() : "";
+  const profileItems = [
+    { key: "用户 ID", value: `#${thread.userId}` },
+    { key: "显示名", value: displayName },
+    { key: "用户名", value: thread.username ? `@${thread.username}` : "未设置" },
+    { key: "手机号", value: thread.phone || "未设置" },
+    { key: "消息数量", value: `${messages.length} 条` },
+    { key: "未读数量", value: String(Number(thread.unreadCount || 0)) },
+    { key: "最后更新时间", value: formatSupportTimestamp(thread.lastMessageAt, true) || "暂无" },
+    { key: "最近一条消息", value: latestText || "暂无" },
+  ];
+
+  elements.supportThreadProfile.innerHTML = `
+    <div class="support-profile-card">
+      <div class="support-profile-block">
+        <div class="support-profile-head">
+          <div class="support-thread-avatar large">${escapeHTML(getSupportInitials(displayName, thread.userId))}</div>
+          <div>
+            <div class="support-profile-name">${escapeHTML(displayName)}</div>
+            <div class="support-profile-subtitle">客服会话概览</div>
+          </div>
+        </div>
+      </div>
+      <div class="support-profile-block support-profile-grid">
+        ${profileItems
+          .map(
+            (item) => `
+              <div class="support-profile-item">
+                <div class="support-profile-key">${escapeHTML(item.key)}</div>
+                <div class="support-profile-value">${escapeHTML(item.value)}</div>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+    </div>
+  `;
 }
 
 async function sendSupportReply() {
@@ -1487,6 +1672,7 @@ async function sendSupportReply() {
     elements.supportReplyButton.disabled = !state.selectedSupportUserId;
   }
 }
+
 
 function getSupportDisplayName(thread) {
   if (thread && thread.displayName && String(thread.displayName).trim()) {
