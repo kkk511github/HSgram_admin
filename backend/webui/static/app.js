@@ -996,18 +996,18 @@ async function createInviteCode() {
 
 async function saveInviteSettings() {
   try {
-    const response = await api("/api/admin/invite-code-settings", {
+    await api("/api/admin/invite-code-settings", {
       method: "POST",
       body: JSON.stringify({
         enabled: !!elements.inviteSignupEnabledInput.checked,
       }),
     });
-    state.inviteSettings = response.data || { enabled: true, updatedAt: 0 };
+    await loadInviteSettings();
     renderInviteSettings();
-    elements.inviteStatusText.textContent = "邀请码注册开关已保存";
-    toast(state.inviteSettings.enabled ? "已启用邀请码注册" : "已关闭邀请码注册");
+    elements.inviteStatusText.textContent = "\u9080\u8bf7\u7801\u6ce8\u518c\u5f00\u5173\u5df2\u4fdd\u5b58";
+    toast(state.inviteSettings.enabled ? "\u5df2\u542f\u7528\u9080\u8bf7\u7801\u6ce8\u518c" : "\u5df2\u5173\u95ed\u9080\u8bf7\u7801\u6ce8\u518c");
   } catch (error) {
-    toast(error.message || "保存邀请码设置失败");
+    toast(error.message || "\u4fdd\u5b58\u9080\u8bf7\u7801\u8bbe\u7f6e\u5931\u8d25");
   }
 }
 

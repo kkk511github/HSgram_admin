@@ -68,10 +68,6 @@ func (h *Handler) handleInviteCodeSettings(w http.ResponseWriter, r *http.Reques
 			writeError(w, http.StatusInternalServerError, "load invite settings failed")
 			return
 		}
-		if found {
-			writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: settings})
-			return
-		}
 
 		cacheSettings, err := h.invites.GetSettings(r.Context())
 		if err != nil {
@@ -79,14 +75,15 @@ func (h *Handler) handleInviteCodeSettings(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		if cacheSettings.UpdatedAt != 0 {
-			if persisted, err := h.store.SaveInviteCodeSettings(r.Context(), cacheSettings.Enabled); err == nil {
-				settings = persisted
-			} else {
-				settings = store.InviteCodeSettingsRecord{Enabled: cacheSettings.Enabled, UpdatedAt: cacheSettings.UpdatedAt}
-			}
-		} else {
 			settings = store.InviteCodeSettingsRecord{Enabled: cacheSettings.Enabled, UpdatedAt: cacheSettings.UpdatedAt}
+			writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: settings})
+			return
 		}
+		if found {
+			writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: settings})
+			return
+		}
+
 		writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: settings})
 	case http.MethodPost:
 		var request struct {
