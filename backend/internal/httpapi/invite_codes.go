@@ -80,6 +80,14 @@ func (h *Handler) handleInviteCodeSettings(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		if found {
+			cacheSettings, err = h.invites.UpdateSettings(r.Context(), settings.Enabled)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "save invite settings failed")
+				return
+			}
+			if cacheSettings.UpdatedAt > settings.UpdatedAt {
+				settings.UpdatedAt = cacheSettings.UpdatedAt
+			}
 			writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: settings})
 			return
 		}

@@ -18,7 +18,7 @@ type InviteCodeSettingsRecord struct {
 
 func DefaultInviteCodeSettingsRecord() InviteCodeSettingsRecord {
 	return InviteCodeSettingsRecord{
-		Enabled:   true,
+		Enabled:   false,
 		UpdatedAt: 0,
 	}
 }

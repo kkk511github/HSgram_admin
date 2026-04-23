@@ -78,7 +78,7 @@ func NormalizeCode(code string) string {
 
 func DefaultSettings() Settings {
 	return Settings{
-		Enabled:   true,
+		Enabled:   false,
 		UpdatedAt: 0,
 	}
 }

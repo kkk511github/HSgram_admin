@@ -28,7 +28,7 @@ const state = {
   uploadState: "idle",
   riskSettings: { kickLoginBlockSeconds: 300, signupIpDailyLimit: 5 },
   signupIpStats: [],
-  inviteSettings: { enabled: true, updatedAt: 0 },
+  inviteSettings: { enabled: false, updatedAt: 0 },
   inviteCodes: [],
   selectedInviteCode: null,
   selectedInviteDetail: null,
@@ -280,7 +280,7 @@ function logout() {
   state.uploadState = "idle";
   state.riskSettings = { kickLoginBlockSeconds: 300, signupIpDailyLimit: 5 };
   state.signupIpStats = [];
-  state.inviteSettings = { enabled: true, updatedAt: 0 };
+  state.inviteSettings = { enabled: false, updatedAt: 0 };
   state.inviteCodes = [];
   state.selectedInviteCode = null;
   state.selectedInviteDetail = null;
@@ -926,7 +926,7 @@ async function loadInviteCodes() {
 
 async function loadInviteSettings() {
   const response = await api("/api/admin/invite-code-settings");
-  state.inviteSettings = response.data || { enabled: true, updatedAt: 0 };
+  state.inviteSettings = response.data || { enabled: false, updatedAt: 0 };
   renderInviteSettings();
 }
 
