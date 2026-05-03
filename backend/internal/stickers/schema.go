@@ -68,6 +68,19 @@ func (s *Service) EnsureSchema(ctx context.Context) error {
 			KEY idx_recent_stickers_user_used (user_id, attached, used_at),
 			CONSTRAINT fk_recent_stickers_sticker_id FOREIGN KEY (sticker_id) REFERENCES stickers(id) ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+		`CREATE TABLE IF NOT EXISTS sticker_emoji_index (
+			emoji VARCHAR(64) NOT NULL,
+			sticker_id BIGINT NOT NULL,
+			set_id BIGINT NOT NULL,
+			weight INT NOT NULL DEFAULT 100,
+			source VARCHAR(32) NOT NULL DEFAULT 'sticker_import',
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (emoji, sticker_id),
+			KEY idx_sticker_emoji_index_lookup (emoji, weight),
+			KEY idx_sticker_emoji_index_set (set_id),
+			CONSTRAINT fk_sticker_emoji_index_sticker_id FOREIGN KEY (sticker_id) REFERENCES stickers(id) ON DELETE CASCADE,
+			CONSTRAINT fk_sticker_emoji_index_set_id FOREIGN KEY (set_id) REFERENCES sticker_sets(id) ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
 	}
 	for _, stmt := range statements {
 		if _, err := s.db.ExecContext(ctx, stmt); err != nil {

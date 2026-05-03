@@ -168,6 +168,7 @@ func expectImportSQL(mock sqlmock.Sqlmock, setID, stickerID, setAccessHash int64
 	mock.ExpectExec("INSERT INTO stickers").WillReturnResult(sqlmock.NewResult(stickerID, 1))
 	mock.ExpectExec("UPDATE stickers SET storage_key").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("INSERT INTO documents").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("INSERT INTO sticker_emoji_index").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 }
 

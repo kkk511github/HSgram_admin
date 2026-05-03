@@ -20,6 +20,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/teamgram/proto/mtproto"
+	"github.com/zeromicro/go-zero/core/jsonx"
 )
 
 const (
@@ -433,6 +434,15 @@ func (s *Service) persistImport(ctx context.Context, req ImportRequest, set Tele
 		if err := insertDocumentRow(ctx, tx, stickerID, st.AccessHash, key, setID, persistedSetAccessHash, st); err != nil {
 			return nil, err
 		}
+		if strings.TrimSpace(st.Emoji) != "" {
+			if _, err := tx.ExecContext(ctx, `
+				INSERT INTO sticker_emoji_index (emoji, sticker_id, set_id, weight, source)
+				VALUES (?, ?, ?, 100, 'telegram_import')
+				ON DUPLICATE KEY UPDATE set_id = VALUES(set_id), weight = VALUES(weight), source = VALUES(source)`,
+				strings.TrimSpace(st.Emoji), stickerID, setID); err != nil {
+				return nil, err
+			}
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
@@ -450,12 +460,13 @@ func (s *Service) persistImport(ctx context.Context, req ImportRequest, set Tele
 
 func insertDocumentRow(ctx context.Context, tx *sql.Tx, stickerID, accessHash int64, key string, setID, setAccessHash int64, st importSticker) error {
 	inputSet := mtproto.MakeTLInputStickerSetID(&mtproto.InputStickerSet{Id: setID, AccessHash: setAccessHash}).To_InputStickerSet()
+	displayName := stickerDisplayFileName(stickerID, st.MimeType)
 	attrs := []*mtproto.DocumentAttribute{
 		mtproto.MakeTLDocumentAttributeImageSize(&mtproto.DocumentAttribute{W: st.Width, H: st.Height}).To_DocumentAttribute(),
 		mtproto.MakeTLDocumentAttributeSticker(&mtproto.DocumentAttribute{Alt: st.Emoji, Stickerset: inputSet}).To_DocumentAttribute(),
-		mtproto.MakeTLDocumentAttributeFilename(&mtproto.DocumentAttribute{FileName: key}).To_DocumentAttribute(),
+		mtproto.MakeTLDocumentAttributeFilename(&mtproto.DocumentAttribute{FileName: displayName}).To_DocumentAttribute(),
 	}
-	attrJSON, _ := json.Marshal(attrs)
+	attrJSON, _ := jsonx.Marshal(attrs)
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO documents (document_id, access_hash, dc_id, file_path, file_size, uploaded_file_name, ext, mime_type, thumb_id, video_thumb_id, attributes, date2)
 		VALUES (?, ?, 1, ?, ?, ?, ?, ?, 0, 0, ?, ?)
@@ -472,7 +483,7 @@ func insertDocumentRow(ctx context.Context, tx *sql.Tx, stickerID, accessHash in
 		accessHash,
 		key,
 		int64(len(st.Data)),
-		key,
+		displayName,
 		fileExtForMime(st.MimeType),
 		st.MimeType,
 		string(attrJSON),
@@ -571,6 +582,10 @@ func fileExtForMime(mimeType string) string {
 	default:
 		return ".dat"
 	}
+}
+
+func stickerDisplayFileName(id int64, mimeType string) string {
+	return fmt.Sprintf("sticker_%d%s", id, fileExtForMime(mimeType))
 }
 
 func accessHashForMime(mimeType string, randomPart int64) int64 {

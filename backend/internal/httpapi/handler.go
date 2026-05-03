@@ -21,6 +21,7 @@ import (
 	"hsgram-admin/backend/internal/gatewayrpc"
 	"hsgram-admin/backend/internal/invitecodes"
 	"hsgram-admin/backend/internal/messenger"
+	reactionconfig "hsgram-admin/backend/internal/reactions"
 	"hsgram-admin/backend/internal/risk"
 	"hsgram-admin/backend/internal/statusrpc"
 	stickerimport "hsgram-admin/backend/internal/stickers"
@@ -41,6 +42,7 @@ type Handler struct {
 	invites      *invitecodes.Service
 	msg          messageService
 	stickers     stickerService
+	reactions    reactionConfigService
 	updates      UpdateConfig
 	web          http.Handler
 	releases     http.Handler
@@ -56,6 +58,14 @@ type stickerService interface {
 	ListSets(ctx context.Context) ([]stickerimport.SetSummary, error)
 	GetSet(ctx context.Context, id int64) (*stickerimport.SetDetail, error)
 	DisableSet(ctx context.Context, id int64) error
+}
+
+type reactionConfigService interface {
+	ListReactions(ctx context.Context) ([]reactionconfig.Reaction, error)
+	UpsertReaction(ctx context.Context, reaction reactionconfig.Reaction) (*reactionconfig.Reaction, error)
+	PatchReaction(ctx context.Context, id int64, patch reactionconfig.ReactionPatch) (*reactionconfig.Reaction, error)
+	ListEmojiKeywords(ctx context.Context, langCode string) ([]reactionconfig.EmojiKeyword, error)
+	UpsertEmojiKeyword(ctx context.Context, keyword reactionconfig.EmojiKeyword) (*reactionconfig.EmojiKeyword, error)
 }
 
 type broadcastService interface {
@@ -100,7 +110,7 @@ type dependencyState struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Service, authsessions *authsessionrpc.Client, syncClient *syncrpc.Client, statusClient *statusrpc.Client, gatewayClient *gatewayrpc.Client, riskService *risk.Service, inviteService *invitecodes.Service, msgClient *messenger.Client, stickerSvc stickerService, updates UpdateConfig) http.Handler {
+func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Service, authsessions *authsessionrpc.Client, syncClient *syncrpc.Client, statusClient *statusrpc.Client, gatewayClient *gatewayrpc.Client, riskService *risk.Service, inviteService *invitecodes.Service, msgClient *messenger.Client, stickerSvc stickerService, reactionSvc reactionConfigService, updates UpdateConfig) http.Handler {
 	handler := &Handler{
 		tokens:   tokens,
 		store:    userStore,
@@ -132,6 +142,9 @@ func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Ser
 	if stickerSvc != nil {
 		handler.stickers = stickerSvc
 	}
+	if reactionSvc != nil {
+		handler.reactions = reactionSvc
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/healthz", handler.handleHealthz)
@@ -158,6 +171,9 @@ func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Ser
 	mux.Handle("/api/admin/stickers/import", handler.requireSuperAdmin(handler.handleStickerImport))
 	mux.Handle("/api/admin/stickers/sets", handler.requireSuperAdmin(handler.handleStickerSets))
 	mux.Handle("/api/admin/stickers/sets/", handler.requireSuperAdmin(handler.handleStickerSetRoutes))
+	mux.Handle("/api/admin/reactions", handler.requireSuperAdmin(handler.handleReactions))
+	mux.Handle("/api/admin/reactions/", handler.requireSuperAdmin(handler.handleReactionRoutes))
+	mux.Handle("/api/admin/emoji-keywords", handler.requireSuperAdmin(handler.handleEmojiKeywords))
 	mux.HandleFunc("/td/current", handler.handleTDesktopCurrent)
 	mux.Handle("/releases/", handler.releases)
 	mux.Handle("/", handler.web)
