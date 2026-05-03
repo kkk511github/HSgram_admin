@@ -18,21 +18,23 @@ func (h *Handler) handleDefaultAdminContacts(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: settings})
 	case http.MethodPut, http.MethodPost:
 		var request struct {
-			UserIDs []int64 `json:"userIds"`
+			UserIDs        []int64 `json:"userIds"`
+			WelcomeMessage string  `json:"welcomeMessage"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid json body")
 			return
 		}
 
-		settings, err := h.store.SaveDefaultAdminContactsSettings(r.Context(), request.UserIDs)
+		settings, err := h.store.SaveDefaultAdminContactsSettings(r.Context(), request.UserIDs, request.WelcomeMessage)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "save default admin contacts failed: "+err.Error())
 			return
 		}
 
 		_ = h.store.CreateAuditLog(r.Context(), admin, "default_admin_contacts.update", 0, map[string]any{
-			"userIds": settings.UserIDs,
+			"userIds":        settings.UserIDs,
+			"welcomeMessage": settings.WelcomeMessage,
 		})
 		writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: settings})
 	default:

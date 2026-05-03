@@ -320,6 +320,10 @@
                     默认添加的用户 ID
                     <textarea id="defaultAdminIdsInput" rows="7" placeholder="支持多个用户 ID，用逗号、空格或换行分隔，例如：10001, 10002"></textarea>
                   </label>
+                  <label>
+                    新用户欢迎消息
+                    <textarea id="defaultAdminWelcomeInput" rows="5" placeholder="留空则只添加联系人，不自动发消息。支持 {name}、{first_name}、{last_name}、{phone}、{user_id}、{app_name}"></textarea>
+                  </label>
                   <div class="muted">保存时会校验用户存在；留空表示关闭自动添加。</div>
                   <div class="action-row compact">
                     <button id="defaultAdminSaveButton">保存配置</button>

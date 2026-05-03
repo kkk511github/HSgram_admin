@@ -33,7 +33,7 @@ const state = {
   inviteCodes: [],
   selectedInviteCode: null,
   selectedInviteDetail: null,
-  defaultAdminContacts: { userIds: [], updatedAt: 0 },
+  defaultAdminContacts: { userIds: [], welcomeMessage: "", updatedAt: 0 },
   supportThreads: [],
   selectedSupportUserId: null,
   selectedSupportThread: null,
@@ -94,6 +94,7 @@ const elements = {
   inviteEnableButton: document.getElementById("inviteEnableButton"),
   inviteDisableButton: document.getElementById("inviteDisableButton"),
   defaultAdminIdsInput: document.getElementById("defaultAdminIdsInput"),
+  defaultAdminWelcomeInput: document.getElementById("defaultAdminWelcomeInput"),
   defaultAdminSaveButton: document.getElementById("defaultAdminSaveButton"),
   defaultAdminRefreshButton: document.getElementById("defaultAdminRefreshButton"),
   defaultAdminStatusText: document.getElementById("defaultAdminStatusText"),
@@ -296,7 +297,7 @@ function logout() {
   state.inviteCodes = [];
   state.selectedInviteCode = null;
   state.selectedInviteDetail = null;
-  state.defaultAdminContacts = { userIds: [], updatedAt: 0 };
+  state.defaultAdminContacts = { userIds: [], welcomeMessage: "", updatedAt: 0 };
   state.supportThreads = [];
   state.selectedSupportUserId = null;
   state.selectedSupportThread = null;
@@ -1100,8 +1101,9 @@ async function updateInviteCodeEnabled(enabled) {
 
 async function loadDefaultAdminContacts() {
   const response = await api("/api/admin/default-admin-contacts");
-  state.defaultAdminContacts = response.data || { userIds: [], updatedAt: 0 };
+  state.defaultAdminContacts = response.data || { userIds: [], welcomeMessage: "", updatedAt: 0 };
   state.defaultAdminContacts.userIds = Array.isArray(state.defaultAdminContacts.userIds) ? state.defaultAdminContacts.userIds : [];
+  state.defaultAdminContacts.welcomeMessage = typeof state.defaultAdminContacts.welcomeMessage === "string" ? state.defaultAdminContacts.welcomeMessage : "";
   renderDefaultAdminContacts();
   elements.defaultAdminStatusText.textContent = "默认管理员配置已刷新";
 }
@@ -1115,9 +1117,9 @@ async function saveDefaultAdminContacts() {
   try {
     const response = await api("/api/admin/default-admin-contacts", {
       method: "PUT",
-      body: JSON.stringify({ userIds }),
+      body: JSON.stringify({ userIds, welcomeMessage: elements.defaultAdminWelcomeInput.value.trim() }),
     });
-    state.defaultAdminContacts = response.data || { userIds: [], updatedAt: 0 };
+    state.defaultAdminContacts = response.data || { userIds: [], welcomeMessage: "", updatedAt: 0 };
     renderDefaultAdminContacts();
     elements.defaultAdminStatusText.textContent = "默认管理员配置已保存";
     toast("默认管理员联系人已保存");
@@ -1130,9 +1132,10 @@ async function saveDefaultAdminContacts() {
 function renderDefaultAdminContacts() {
   const ids = Array.isArray(state.defaultAdminContacts.userIds) ? state.defaultAdminContacts.userIds : [];
   elements.defaultAdminIdsInput.value = ids.join("\n");
+  elements.defaultAdminWelcomeInput.value = state.defaultAdminContacts.welcomeMessage || "";
   elements.defaultAdminList.innerHTML = "";
 
-  if (!ids.length) {
+  if (!ids.length && !state.defaultAdminContacts.welcomeMessage) {
     elements.defaultAdminList.innerHTML = `<div class="muted">当前没有配置默认管理员联系人。</div>`;
     return;
   }
@@ -1146,6 +1149,16 @@ function renderDefaultAdminContacts() {
     `;
     elements.defaultAdminList.appendChild(item);
   });
+
+  if (state.defaultAdminContacts.welcomeMessage) {
+    const item = document.createElement("div");
+    item.className = "list-item";
+    item.innerHTML = `
+      <div class="list-item-title">欢迎消息</div>
+      <div>${escapeHTML(state.defaultAdminContacts.welcomeMessage)}</div>
+    `;
+    elements.defaultAdminList.appendChild(item);
+  }
 
   if (state.defaultAdminContacts.updatedAt) {
     const item = document.createElement("div");

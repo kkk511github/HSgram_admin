@@ -19,8 +19,9 @@ type InviteCodeSettingsRecord struct {
 }
 
 type DefaultAdminContactsSettingsRecord struct {
-	UserIDs   []int64 `json:"userIds"`
-	UpdatedAt int64   `json:"updatedAt"`
+	UserIDs        []int64 `json:"userIds"`
+	WelcomeMessage string  `json:"welcomeMessage"`
+	UpdatedAt      int64   `json:"updatedAt"`
 }
 
 func DefaultInviteCodeSettingsRecord() InviteCodeSettingsRecord {
@@ -32,8 +33,9 @@ func DefaultInviteCodeSettingsRecord() InviteCodeSettingsRecord {
 
 func DefaultAdminContactsSettingsRecordValue() DefaultAdminContactsSettingsRecord {
 	return DefaultAdminContactsSettingsRecord{
-		UserIDs:   []int64{},
-		UpdatedAt: 0,
+		UserIDs:        []int64{},
+		WelcomeMessage: "",
+		UpdatedAt:      0,
 	}
 }
 
@@ -120,11 +122,13 @@ func (s *Store) GetDefaultAdminContactsSettings(ctx context.Context) (DefaultAdm
 		return DefaultAdminContactsSettingsRecordValue(), false, err
 	}
 	settings.UserIDs = normalizeUserIDList(settings.UserIDs)
+	settings.WelcomeMessage = strings.TrimSpace(settings.WelcomeMessage)
 	return settings, true, nil
 }
 
-func (s *Store) SaveDefaultAdminContactsSettings(ctx context.Context, userIDs []int64) (DefaultAdminContactsSettingsRecord, error) {
+func (s *Store) SaveDefaultAdminContactsSettings(ctx context.Context, userIDs []int64, welcomeMessage string) (DefaultAdminContactsSettingsRecord, error) {
 	userIDs = normalizeUserIDList(userIDs)
+	welcomeMessage = strings.TrimSpace(welcomeMessage)
 	if len(userIDs) > 0 {
 		existing, err := s.ExistingUserIDs(ctx, userIDs)
 		if err != nil {
@@ -136,8 +140,9 @@ func (s *Store) SaveDefaultAdminContactsSettings(ctx context.Context, userIDs []
 	}
 
 	settings := DefaultAdminContactsSettingsRecord{
-		UserIDs:   userIDs,
-		UpdatedAt: time.Now().Unix(),
+		UserIDs:        userIDs,
+		WelcomeMessage: welcomeMessage,
+		UpdatedAt:      time.Now().Unix(),
 	}
 
 	payload, err := json.Marshal(&settings)
