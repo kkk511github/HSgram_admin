@@ -5,6 +5,7 @@ const PANEL_META = {
   defaultAdmins: { title: "默认管理员", subtitle: "配置新账号注册后自动添加的管理员联系人" },
   support: { title: "客服消息", subtitle: "统一查看用户咨询并通过客服号直接回复" },
   releases: { title: "安装包发布", subtitle: "上传 Android / PC 安装包并发布为当前最新版本" },
+  stickers: { title: "贴纸导入", subtitle: "导入授权 Telegram sticker set 并查看已导入列表" },
   broadcast: { title: "系统广播", subtitle: "通过系统通知号向用户发送广播消息" },
 };
 
@@ -26,6 +27,7 @@ const state = {
   selectedBroadcastId: null,
   releases: [],
   selectedReleaseId: null,
+  stickerSets: [],
   uploadProgress: 0,
   uploadState: "idle",
   riskSettings: { kickLoginBlockSeconds: 300, signupIpDailyLimit: 5 },
@@ -55,6 +57,7 @@ const elements = {
   panelDefaultAdmins: document.getElementById("panelDefaultAdmins"),
   panelSupport: document.getElementById("panelSupport"),
   panelReleases: document.getElementById("panelReleases"),
+  panelStickers: document.getElementById("panelStickers"),
   panelBroadcast: document.getElementById("panelBroadcast"),
   sessionPanel: document.getElementById("sessionPanel"),
   adminName: document.getElementById("adminName"),
@@ -144,6 +147,13 @@ const elements = {
   releasePublishMessage: document.getElementById("releasePublishMessage"),
   releaseBroadcastNotice: document.getElementById("releaseBroadcastNotice"),
   releasePublishButton: document.getElementById("releasePublishButton"),
+  stickerShortNameInput: document.getElementById("stickerShortNameInput"),
+  stickerSourceInput: document.getElementById("stickerSourceInput"),
+  stickerAuthorizationInput: document.getElementById("stickerAuthorizationInput"),
+  stickerImportButton: document.getElementById("stickerImportButton"),
+  stickerRefreshButton: document.getElementById("stickerRefreshButton"),
+  stickerStatusText: document.getElementById("stickerStatusText"),
+  stickerSetsList: document.getElementById("stickerSetsList"),
   toast: document.getElementById("toast"),
 };
 
@@ -210,6 +220,8 @@ elements.broadcastSendButton.addEventListener("click", sendBroadcast);
 elements.releaseUploadButton.addEventListener("click", uploadRelease);
 elements.releasePublishButton.addEventListener("click", publishSelectedRelease);
 elements.releaseNotifyUsers.addEventListener("change", syncReleaseBroadcastFields);
+elements.stickerImportButton.addEventListener("click", importStickerSet);
+elements.stickerRefreshButton.addEventListener("click", () => loadStickerSets().catch((error) => toast(error.message || "加载贴纸包失败")));
 elements.searchInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     runSearch();
@@ -235,6 +247,7 @@ async function bootstrap() {
     await refreshInvitePanel();
     await loadDefaultAdminContacts();
     await loadReleases();
+    await loadStickerSets().catch(() => {});
     if (state.features.broadcasts) {
       await loadBroadcasts();
     } else {
@@ -271,6 +284,7 @@ async function onLogin(event) {
     await refreshInvitePanel();
     await loadDefaultAdminContacts();
     await loadReleases();
+    await loadStickerSets().catch(() => {});
     if (state.features.broadcasts) {
       await loadBroadcasts();
     } else {
@@ -319,7 +333,7 @@ function renderLoggedOut() {
 }
 
 function setActivePanel(panel) {
-  const allowed = ["users", "risk", "invites", "defaultAdmins", "support", "releases", "broadcast"];
+  const allowed = ["users", "risk", "invites", "defaultAdmins", "support", "releases", "stickers", "broadcast"];
   let id = allowed.includes(panel) ? panel : "users";
   if (id === "support" && !state.features.support) {
     toast("当前部署未配置客服消息 RPC，客服面板不可用");
@@ -337,6 +351,7 @@ function setActivePanel(panel) {
   elements.panelDefaultAdmins.classList.toggle("hidden", id !== "defaultAdmins");
   elements.panelSupport.classList.toggle("hidden", id !== "support");
   elements.panelReleases.classList.toggle("hidden", id !== "releases");
+  elements.panelStickers.classList.toggle("hidden", id !== "stickers");
   elements.panelBroadcast.classList.toggle("hidden", id !== "broadcast");
 
   const meta = PANEL_META[id] || PANEL_META.users;
@@ -345,8 +360,11 @@ function setActivePanel(panel) {
 
   if (id === "support") {
     activateSupportPanel().catch((error) => toast(error.message || "加载客服消息失败"));
-  } else {
-    stopSupportPolling();
+    return;
+  }
+  stopSupportPolling();
+  if (id === "stickers") {
+    loadStickerSets().catch((error) => toast(error.message || "加载贴纸包失败"));
   }
 }
 
@@ -489,6 +507,84 @@ function renderReleaseDetail(release) {
     <div>更新说明: ${escapeHTML(release.changelog || "-")}</div>
   `;
   elements.releaseDetailList.appendChild(item);
+}
+
+async function loadStickerSets() {
+  try {
+    const response = await api("/api/admin/stickers/sets");
+    state.stickerSets = Array.isArray(response.data) ? response.data : [];
+    renderStickerSets();
+    elements.stickerStatusText.textContent = `共 ${state.stickerSets.length} 个贴纸包`;
+  } catch (error) {
+    state.stickerSets = [];
+    renderStickerSets(error);
+    elements.stickerStatusText.textContent = error.code === "sticker_import_unavailable"
+      ? "贴纸导入未配置，请检查 Bot Token 和 MinIO 配置"
+      : "贴纸列表加载失败";
+    throw error;
+  }
+}
+
+function renderStickerSets(error) {
+  elements.stickerSetsList.innerHTML = "";
+  if (error) {
+    elements.stickerSetsList.innerHTML = `<div class="muted">贴纸列表加载失败</div>`;
+    return;
+  }
+  if (!state.stickerSets.length) {
+    elements.stickerSetsList.innerHTML = `<div class="muted">暂无已导入贴纸包</div>`;
+    return;
+  }
+
+  state.stickerSets.forEach((set) => {
+    const item = document.createElement("div");
+    item.className = "list-item";
+    const disabled = set.disabledAt ? " | 已停用" : "";
+    item.innerHTML = `
+      <div class="list-item-title">${escapeHTML(set.title || set.shortName)}</div>
+      <div>short name: ${escapeHTML(set.shortName || "-")}</div>
+      <div>类型: ${escapeHTML(set.stickerType || "-")} | 数量: ${Number(set.stickerCount || 0)}${disabled}</div>
+      <div>来源: ${escapeHTML(set.sourcePlatform || "-")} | hash: ${escapeHTML(set.hash || "-")}</div>
+      <div>更新时间: ${formatDateTime(set.updatedAt)}</div>
+    `;
+    elements.stickerSetsList.appendChild(item);
+  });
+}
+
+async function importStickerSet() {
+  const shortName = elements.stickerShortNameInput.value.trim();
+  const source = elements.stickerSourceInput.value.trim() || "authorized";
+  const authorizationStatement = elements.stickerAuthorizationInput.value.trim();
+  if (!shortName) {
+    toast("请填写贴纸包链接或 short name");
+    return;
+  }
+  if (!authorizationStatement) {
+    toast("请填写授权说明");
+    return;
+  }
+
+  elements.stickerImportButton.disabled = true;
+  elements.stickerStatusText.textContent = "正在导入贴纸包...";
+  try {
+    const response = await api("/api/admin/stickers/import", {
+      method: "POST",
+      body: JSON.stringify({ shortName, source, authorizationStatement }),
+    });
+    const result = response.data || {};
+    elements.stickerShortNameInput.value = "";
+    elements.stickerAuthorizationInput.value = "";
+    elements.stickerStatusText.textContent = `已导入 ${escapeHTML(result.shortName || shortName)}，共 ${Number(result.stickerCount || 0)} 个贴纸`;
+    await loadStickerSets();
+    toast(result.updated ? "贴纸包已更新" : "贴纸包导入成功");
+  } catch (error) {
+    elements.stickerStatusText.textContent = error.code === "sticker_import_unavailable"
+      ? "贴纸导入未配置，请检查 Bot Token 和 MinIO 配置"
+      : (error.message || "导入失败");
+    toast(error.message || "导入贴纸包失败");
+  } finally {
+    elements.stickerImportButton.disabled = false;
+  }
 }
 
 function syncReleaseBroadcastFields() {

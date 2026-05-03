@@ -437,6 +437,7 @@ h3 {
 .toolbar,
 .release-card,
 .broadcast-card,
+.sticker-card,
 .support-workspace {
   padding: 20px;
 }
@@ -445,6 +446,7 @@ h3 {
 .action-row,
 .filter-grid,
 .broadcast-grid,
+.sticker-grid,
 .release-grid {
   display: grid;
   gap: 12px;
@@ -469,7 +471,8 @@ h3 {
 }
 
 .release-grid,
-.broadcast-grid {
+.broadcast-grid,
+.sticker-grid {
   grid-template-columns: minmax(320px, 1fr) minmax(300px, 0.9fr);
   align-items: start;
 }

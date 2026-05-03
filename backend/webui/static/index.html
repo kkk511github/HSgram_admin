@@ -47,6 +47,11 @@
               <span class="nav-label">安装包发布</span>
               <span class="nav-desc">上传版本、查看发布历史、推送通知</span>
             </button>
+            <button type="button" class="nav-item" data-panel="stickers" id="navStickers">
+              <span class="nav-kicker">素材</span>
+              <span class="nav-label">贴纸导入</span>
+              <span class="nav-desc">导入授权 Telegram sticker set</span>
+            </button>
             <button type="button" class="nav-item" data-panel="broadcast" id="navBroadcast">
               <span class="nav-kicker">通知</span>
               <span class="nav-label">系统广播</span>
@@ -564,6 +569,44 @@
                   <div id="broadcastHistoryList" class="list"></div>
                   <div class="section-title minor">投递详情</div>
                   <div id="broadcastDetailList" class="list"></div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div id="panelStickers" class="panel hidden" data-panel="stickers">
+            <section class="card sticker-card">
+              <div class="panel-heading">
+                <div>
+                  <div class="section-title">贴纸导入</div>
+                  <div class="muted">导入自有或已授权的 Telegram sticker set，导入后默认对客户端可见。</div>
+                </div>
+              </div>
+
+              <div class="sticker-grid">
+                <div class="stack">
+                  <label>
+                    贴纸包链接或 short name
+                    <input id="stickerShortNameInput" placeholder="https://t.me/addstickers/UtyaDuck" />
+                  </label>
+                  <label>
+                    来源备注
+                    <input id="stickerSourceInput" placeholder="例如 authorized / 自有素材 / 用户授权提交" />
+                  </label>
+                  <label>
+                    授权说明
+                    <textarea id="stickerAuthorizationInput" rows="5" placeholder="说明该贴纸包为自有或已获得授权导入"></textarea>
+                  </label>
+                  <div class="action-row compact">
+                    <button id="stickerImportButton">导入贴纸包</button>
+                    <button id="stickerRefreshButton" class="secondary">刷新列表</button>
+                  </div>
+                  <div id="stickerStatusText" class="muted"></div>
+                </div>
+
+                <div class="stack">
+                  <div class="section-title minor">已导入贴纸包</div>
+                  <div id="stickerSetsList" class="list"></div>
                 </div>
               </div>
             </section>
