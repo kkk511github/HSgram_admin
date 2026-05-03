@@ -32,6 +32,11 @@
               <span class="nav-label">邀请码</span>
               <span class="nav-desc">生成邀请码并查看使用记录</span>
             </button>
+            <button type="button" class="nav-item" data-panel="defaultAdmins" id="navDefaultAdmins">
+              <span class="nav-kicker">默认</span>
+              <span class="nav-label">默认管理员</span>
+              <span class="nav-desc">新账号自动添加指定用户</span>
+            </button>
             <button type="button" class="nav-item" data-panel="support" id="navSupport">
               <span class="nav-kicker">客服</span>
               <span class="nav-label">客服消息</span>
@@ -300,6 +305,37 @@
             </section>
           </div>
 
+          <div id="panelDefaultAdmins" class="panel hidden" data-panel="defaultAdmins">
+            <section class="card release-card">
+              <div class="panel-heading">
+                <div>
+                  <div class="section-title">默认管理员联系人</div>
+                  <div class="muted">新注册账号会自动与这里配置的用户建立双向联系人关系。</div>
+                </div>
+              </div>
+
+              <div class="release-grid">
+                <div class="stack">
+                  <label>
+                    默认添加的用户 ID
+                    <textarea id="defaultAdminIdsInput" rows="7" placeholder="支持多个用户 ID，用逗号、空格或换行分隔，例如：10001, 10002"></textarea>
+                  </label>
+                  <div class="muted">保存时会校验用户存在；留空表示关闭自动添加。</div>
+                  <div class="action-row compact">
+                    <button id="defaultAdminSaveButton">保存配置</button>
+                    <button id="defaultAdminRefreshButton" class="secondary">刷新</button>
+                  </div>
+                  <div id="defaultAdminStatusText" class="muted"></div>
+                </div>
+
+                <div class="stack">
+                  <div class="section-title minor">当前配置</div>
+                  <div id="defaultAdminList" class="list"></div>
+                </div>
+              </div>
+            </section>
+          </div>
+
           <div id="panelSupport" class="panel hidden" data-panel="support">
             <section class="card support-workspace">
               <div class="support-workspace-head">
@@ -533,6 +569,6 @@
     </div>
 
     <div id="toast" class="toast hidden"></div>
-    <script src="/app.js?v=20260421-4" defer></script>
+    <script src="/app.js?v=20260503-1" defer></script>
   </body>
 </html>

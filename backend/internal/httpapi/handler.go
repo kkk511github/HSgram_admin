@@ -88,6 +88,7 @@ func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Ser
 	mux.Handle("/api/admin/invite-codes", handler.requireSuperAdmin(handler.handleInviteCodes))
 	mux.Handle("/api/admin/invite-code-settings", handler.requireSuperAdmin(handler.handleInviteCodeSettings))
 	mux.Handle("/api/admin/invite-codes/", handler.requireSuperAdmin(handler.handleInviteCodeRoutes))
+	mux.Handle("/api/admin/default-admin-contacts", handler.requireSuperAdmin(handler.handleDefaultAdminContacts))
 	mux.Handle("/api/admin/support/threads", handler.requireAuth(handler.handleSupportThreads))
 	mux.Handle("/api/admin/support/threads/", handler.requireAuth(handler.handleSupportThreadRoutes))
 	mux.Handle("/api/admin/broadcasts/preview", handler.requireSuperAdmin(handler.handleBroadcastPreview))

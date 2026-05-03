@@ -2,6 +2,7 @@ const PANEL_META = {
   users: { title: "用户管理", subtitle: "搜索与处理用户账号、会话与审计" },
   risk: { title: "风控策略", subtitle: "配置踢下线后的登录限制，以及同 IP 注册上限" },
   invites: { title: "邀请码", subtitle: "生成邀请码并查看实时使用记录" },
+  defaultAdmins: { title: "默认管理员", subtitle: "配置新账号注册后自动添加的管理员联系人" },
   support: { title: "客服消息", subtitle: "统一查看用户咨询并通过客服号直接回复" },
   releases: { title: "安装包发布", subtitle: "上传 Android / PC 安装包并发布为当前最新版本" },
   broadcast: { title: "系统广播", subtitle: "通过系统通知号向用户发送广播消息" },
@@ -32,6 +33,7 @@ const state = {
   inviteCodes: [],
   selectedInviteCode: null,
   selectedInviteDetail: null,
+  defaultAdminContacts: { userIds: [], updatedAt: 0 },
   supportThreads: [],
   selectedSupportUserId: null,
   selectedSupportThread: null,
@@ -49,6 +51,7 @@ const elements = {
   panelUsers: document.getElementById("panelUsers"),
   panelRisk: document.getElementById("panelRisk"),
   panelInvites: document.getElementById("panelInvites"),
+  panelDefaultAdmins: document.getElementById("panelDefaultAdmins"),
   panelSupport: document.getElementById("panelSupport"),
   panelReleases: document.getElementById("panelReleases"),
   panelBroadcast: document.getElementById("panelBroadcast"),
@@ -90,6 +93,11 @@ const elements = {
   inviteDetailList: document.getElementById("inviteDetailList"),
   inviteEnableButton: document.getElementById("inviteEnableButton"),
   inviteDisableButton: document.getElementById("inviteDisableButton"),
+  defaultAdminIdsInput: document.getElementById("defaultAdminIdsInput"),
+  defaultAdminSaveButton: document.getElementById("defaultAdminSaveButton"),
+  defaultAdminRefreshButton: document.getElementById("defaultAdminRefreshButton"),
+  defaultAdminStatusText: document.getElementById("defaultAdminStatusText"),
+  defaultAdminList: document.getElementById("defaultAdminList"),
   supportRefreshButton: document.getElementById("supportRefreshButton"),
   supportStatusText: document.getElementById("supportStatusText"),
   supportSearchInput: document.getElementById("supportSearchInput"),
@@ -163,6 +171,8 @@ elements.inviteCreateButton.addEventListener("click", createInviteCode);
 elements.inviteRefreshButton.addEventListener("click", () => refreshInvitePanel().catch((error) => toast(error.message || "加载邀请码失败")));
 elements.inviteEnableButton.addEventListener("click", () => updateInviteCodeEnabled(true));
 elements.inviteDisableButton.addEventListener("click", () => updateInviteCodeEnabled(false));
+elements.defaultAdminSaveButton.addEventListener("click", saveDefaultAdminContacts);
+elements.defaultAdminRefreshButton.addEventListener("click", () => loadDefaultAdminContacts().catch((error) => toast(error.message || "加载默认管理员失败")));
 elements.supportRefreshButton.addEventListener("click", () => refreshSupportPanel().catch((error) => toast(error.message || "加载客服消息失败")));
 elements.supportReplyButton.addEventListener("click", sendSupportReply);
 elements.supportReplyInput.addEventListener("keydown", (event) => {
@@ -219,6 +229,7 @@ async function bootstrap() {
     await loadUsers();
     await refreshRiskPanel();
     await refreshInvitePanel();
+    await loadDefaultAdminContacts();
     await loadReleases();
     if (state.features.broadcasts) {
       await loadBroadcasts();
@@ -253,6 +264,7 @@ async function onLogin(event) {
     await loadUsers();
     await refreshRiskPanel();
     await refreshInvitePanel();
+    await loadDefaultAdminContacts();
     await loadReleases();
     if (state.features.broadcasts) {
       await loadBroadcasts();
@@ -284,6 +296,7 @@ function logout() {
   state.inviteCodes = [];
   state.selectedInviteCode = null;
   state.selectedInviteDetail = null;
+  state.defaultAdminContacts = { userIds: [], updatedAt: 0 };
   state.supportThreads = [];
   state.selectedSupportUserId = null;
   state.selectedSupportThread = null;
@@ -300,7 +313,7 @@ function renderLoggedOut() {
 }
 
 function setActivePanel(panel) {
-  const allowed = ["users", "risk", "invites", "support", "releases", "broadcast"];
+  const allowed = ["users", "risk", "invites", "defaultAdmins", "support", "releases", "broadcast"];
   const id = allowed.includes(panel) ? panel : "users";
   state.activePanel = id;
 
@@ -311,6 +324,7 @@ function setActivePanel(panel) {
   elements.panelUsers.classList.toggle("hidden", id !== "users");
   elements.panelRisk.classList.toggle("hidden", id !== "risk");
   elements.panelInvites.classList.toggle("hidden", id !== "invites");
+  elements.panelDefaultAdmins.classList.toggle("hidden", id !== "defaultAdmins");
   elements.panelSupport.classList.toggle("hidden", id !== "support");
   elements.panelReleases.classList.toggle("hidden", id !== "releases");
   elements.panelBroadcast.classList.toggle("hidden", id !== "broadcast");
@@ -1082,6 +1096,83 @@ async function updateInviteCodeEnabled(enabled) {
   } catch (error) {
     toast(error.message || "更新邀请码状态失败");
   }
+}
+
+async function loadDefaultAdminContacts() {
+  const response = await api("/api/admin/default-admin-contacts");
+  state.defaultAdminContacts = response.data || { userIds: [], updatedAt: 0 };
+  state.defaultAdminContacts.userIds = Array.isArray(state.defaultAdminContacts.userIds) ? state.defaultAdminContacts.userIds : [];
+  renderDefaultAdminContacts();
+  elements.defaultAdminStatusText.textContent = "默认管理员配置已刷新";
+}
+
+async function saveDefaultAdminContacts() {
+  const userIds = parseDefaultAdminContactIds(elements.defaultAdminIdsInput.value);
+  if (!userIds) {
+    toast("用户 ID 只能填写正整数，并用逗号、空格或换行分隔");
+    return;
+  }
+  try {
+    const response = await api("/api/admin/default-admin-contacts", {
+      method: "PUT",
+      body: JSON.stringify({ userIds }),
+    });
+    state.defaultAdminContacts = response.data || { userIds: [], updatedAt: 0 };
+    renderDefaultAdminContacts();
+    elements.defaultAdminStatusText.textContent = "默认管理员配置已保存";
+    toast("默认管理员联系人已保存");
+  } catch (error) {
+    elements.defaultAdminStatusText.textContent = error.message || "保存默认管理员失败";
+    toast(error.message || "保存默认管理员失败");
+  }
+}
+
+function renderDefaultAdminContacts() {
+  const ids = Array.isArray(state.defaultAdminContacts.userIds) ? state.defaultAdminContacts.userIds : [];
+  elements.defaultAdminIdsInput.value = ids.join("\n");
+  elements.defaultAdminList.innerHTML = "";
+
+  if (!ids.length) {
+    elements.defaultAdminList.innerHTML = `<div class="muted">当前没有配置默认管理员联系人。</div>`;
+    return;
+  }
+
+  ids.forEach((id) => {
+    const item = document.createElement("div");
+    item.className = "list-item";
+    item.innerHTML = `
+      <div class="list-item-title">用户 ID: ${id}</div>
+      <div>新账号注册成功后会自动与此用户互为联系人。</div>
+    `;
+    elements.defaultAdminList.appendChild(item);
+  });
+
+  if (state.defaultAdminContacts.updatedAt) {
+    const item = document.createElement("div");
+    item.className = "muted";
+    item.textContent = `更新时间: ${formatUnixDateTime(state.defaultAdminContacts.updatedAt)}`;
+    elements.defaultAdminList.appendChild(item);
+  }
+}
+
+function parseDefaultAdminContactIds(value) {
+  if (!value || !value.trim()) {
+    return [];
+  }
+  const parts = value.split(/[,\s]+/).map((item) => item.trim()).filter(Boolean);
+  const seen = new Set();
+  const ids = [];
+  for (const part of parts) {
+    const id = Number(part);
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      return null;
+    }
+    if (!seen.has(id)) {
+      seen.add(id);
+      ids.push(id);
+    }
+  }
+  return ids;
 }
 
 async function loadRiskSettings() {

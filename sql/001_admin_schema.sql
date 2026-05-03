@@ -21,3 +21,10 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
   KEY idx_admin_audit_logs_target_user (target_user_id),
   KEY idx_admin_audit_logs_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS admin_runtime_settings (
+  setting_key VARCHAR(64) NOT NULL PRIMARY KEY,
+  setting_value_json JSON NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
