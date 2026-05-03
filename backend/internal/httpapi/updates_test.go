@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"hsgram-admin/backend/internal/store"
 )
 
 func TestAndroidLatestManifestUsesPublicBaseURL(t *testing.T) {
@@ -69,6 +71,44 @@ func TestTDesktopCurrentUsesRequestHostForRelativeURL(t *testing.T) {
 	want := "2000:https://updates.example.com/releases/pc/HSgram-pc-2.0.0.exe"
 	if got != want {
 		t.Fatalf("unexpected current body: got %q want %q", got, want)
+	}
+}
+
+func TestWriteLatestUpdateManifestMatchesPublicLatestShape(t *testing.T) {
+	t.Parallel()
+
+	releasesDir := t.TempDir()
+	handler := &Handler{
+		updates: UpdateConfig{
+			ReleasesDir:   releasesDir,
+			PublicBaseURL: "https://admin.example.com",
+		},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/releases/1/publish", nil)
+	release := store.AppRelease{
+		Platform:    store.ReleasePlatformAndroid,
+		Version:     "3.2.1",
+		VersionCode: 321,
+		StoragePath: "android/HSgram-android-3.2.1.apk",
+		Changelog:   "manifest changelog",
+	}
+
+	if err := handler.writeLatestUpdateManifest(req, release); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	var manifest androidUpdateManifest
+	if err := loadManifestFile(filepath.Join(releasesDir, "android", "latest.json"), &manifest); err != nil {
+		t.Fatalf("load manifest: %v", err)
+	}
+	if manifest.Version != "3.2.1" || manifest.VersionCode != 321 {
+		t.Fatalf("unexpected version payload: %#v", manifest)
+	}
+	if manifest.FileURL != "https://admin.example.com/releases/android/HSgram-android-3.2.1.apk" {
+		t.Fatalf("unexpected file_url: %q", manifest.FileURL)
+	}
+	if manifest.Changelog != "manifest changelog" {
+		t.Fatalf("unexpected changelog: %q", manifest.Changelog)
 	}
 }
 

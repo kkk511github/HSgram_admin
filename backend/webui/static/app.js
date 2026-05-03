@@ -11,7 +11,8 @@ const PANEL_META = {
 const state = {
   token: localStorage.getItem("hsgram_admin_token") || "",
   admin: null,
-  features: { broadcasts: false, support: true },
+  features: { broadcasts: false, support: false, fullSessionRevoke: false, realtimeDisconnect: false },
+  dependencies: [],
   activePanel: "users",
   page: 1,
   pageSize: 20,
@@ -147,6 +148,7 @@ const elements = {
 };
 
 let supportPollTimer = null;
+let supportPollFailures = 0;
 
 elements.loginForm.addEventListener("submit", onLogin);
 elements.logoutButton.addEventListener("click", logout);
@@ -223,9 +225,10 @@ async function bootstrap() {
   }
 
   try {
-    const response = await api("/api/admin/me");
-    state.admin = response.data.admin;
-    state.features = normalizeFeatures(response.data.features);
+	    const response = await api("/api/admin/me");
+	    state.admin = response.data.admin;
+	    state.features = normalizeFeatures(response.data.features);
+	    state.dependencies = Array.isArray(response.data.dependencies) ? response.data.dependencies : [];
     renderLoggedIn();
     await loadUsers();
     await refreshRiskPanel();
@@ -256,9 +259,10 @@ async function onLogin(event) {
       auth: false,
     });
 
-    state.token = response.data.token;
-    state.admin = response.data.admin;
-    state.features = normalizeFeatures(response.data.features);
+	    state.token = response.data.token;
+	    state.admin = response.data.admin;
+	    state.features = normalizeFeatures(response.data.features);
+	    state.dependencies = Array.isArray(response.data.dependencies) ? response.data.dependencies : [];
     localStorage.setItem("hsgram_admin_token", state.token);
 
     renderLoggedIn();
@@ -284,6 +288,7 @@ function logout() {
   state.token = "";
   state.admin = null;
   state.features = normalizeFeatures();
+  state.dependencies = [];
   state.activePanel = "users";
   state.users = [];
   state.selectedUserId = null;
@@ -315,7 +320,11 @@ function renderLoggedOut() {
 
 function setActivePanel(panel) {
   const allowed = ["users", "risk", "invites", "defaultAdmins", "support", "releases", "broadcast"];
-  const id = allowed.includes(panel) ? panel : "users";
+  let id = allowed.includes(panel) ? panel : "users";
+  if (id === "support" && !state.features.support) {
+    toast("当前部署未配置客服消息 RPC，客服面板不可用");
+    id = "users";
+  }
   state.activePanel = id;
 
   document.querySelectorAll(".nav-item").forEach((btn) => {
@@ -347,6 +356,10 @@ function renderLoggedIn() {
   elements.sessionPanel.classList.remove("hidden");
   elements.sidebarNav.classList.remove("hidden");
   elements.adminName.textContent = `${state.admin.username} (${state.admin.role})`;
+  if (elements.navSupport) {
+    elements.navSupport.disabled = !state.features.support;
+    elements.navSupport.title = state.features.support ? "" : "客服消息 RPC 未配置";
+  }
   if (state.features.broadcasts) {
     elements.broadcastDisabledNotice.classList.add("hidden");
   } else {
@@ -368,6 +381,7 @@ function renderLoggedIn() {
   elements.releaseBroadcastNotice.textContent = state.features.broadcasts
     ? "勾选后会在发布成功后向全体用户创建一条系统广播通知。"
     : "当前部署未开启广播能力，仍可上传并发布安装包。";
+  renderSupportAvailability();
   syncBroadcastTargetFields();
   syncReleaseBroadcastFields();
   renderUploadProgress();
@@ -1290,7 +1304,10 @@ async function api(url, options = {}) {
 
   const payload = await response.json().catch(() => ({ ok: false, error: "invalid server response" }));
   if (!response.ok || !payload.ok) {
-    throw new Error(payload.error || "request failed");
+    const error = new Error(payload.error || "request failed");
+    error.code = payload.code || "";
+    error.status = response.status;
+    throw error;
   }
 
   return payload;
@@ -1372,9 +1389,48 @@ function toOptionalBool(value) {
 function normalizeFeatures(features) {
   return {
     broadcasts: false,
-    support: true,
+    support: false,
+    fullSessionRevoke: false,
+    realtimeDisconnect: false,
     ...(features || {}),
   };
+}
+
+function renderSupportAvailability() {
+  const enabled = !!state.features.support;
+  if (elements.supportRefreshButton) {
+    elements.supportRefreshButton.disabled = !enabled;
+  }
+  if (elements.supportSearchInput) {
+    elements.supportSearchInput.disabled = !enabled;
+  }
+  if (elements.supportFilterAll) {
+    elements.supportFilterAll.disabled = !enabled;
+  }
+  if (elements.supportFilterUnread) {
+    elements.supportFilterUnread.disabled = !enabled;
+  }
+  if (elements.supportReplyInput) {
+    elements.supportReplyInput.disabled = !enabled;
+    elements.supportReplyInput.placeholder = enabled ? "输入回复内容，Enter 发送" : "客服消息 RPC 未配置，无法回复";
+  }
+  if (elements.supportReplyButton) {
+    elements.supportReplyButton.disabled = !enabled || !state.selectedSupportUserId;
+  }
+  if (!enabled) {
+    state.supportThreads = [];
+    state.selectedSupportUserId = null;
+    state.selectedSupportThread = null;
+    if (elements.supportStatusText) {
+      elements.supportStatusText.textContent = "客服消息 RPC 未配置，当前部署不可用";
+    }
+    if (elements.supportThreadsList) {
+      elements.supportThreadsList.innerHTML = `<div class="muted">客服功能不可用，请配置 ADMIN_MSG_RPC_ADDR 后重启后台。</div>`;
+    }
+    if (elements.supportMessages) {
+      elements.supportMessages.innerHTML = `<div class="muted">客服功能不可用</div>`;
+    }
+  }
 }
 
 function stopSupportPolling() {
@@ -1386,21 +1442,30 @@ function stopSupportPolling() {
 
 function startSupportPolling() {
   stopSupportPolling();
-  if (!state.token || state.activePanel !== "support") {
+  if (!state.token || state.activePanel !== "support" || !state.features.support) {
     return;
   }
   supportPollTimer = window.setInterval(() => {
-    refreshSupportPanel(true).catch(() => {});
+    refreshSupportPanel(true).catch(handleSupportPollError);
   }, 5000);
 }
 
 async function activateSupportPanel() {
+  if (!state.features.support) {
+    renderSupportAvailability();
+    return;
+  }
   await refreshSupportPanel(true);
   startSupportPolling();
 }
 
 async function refreshSupportPanel(silent = false) {
+  if (!state.features.support) {
+    renderSupportAvailability();
+    return;
+  }
   const response = await api("/api/admin/support/threads");
+  supportPollFailures = 0;
   state.supportThreads = response.data || [];
 
   syncSelectedSupportThread();
@@ -1423,6 +1488,23 @@ async function refreshSupportPanel(silent = false) {
       ? `共 ${state.supportThreads.length} 个会话，当前显示 ${visibleThreads.length} 个`
       : "暂无客服消息";
   }
+}
+
+function handleSupportPollError(error) {
+  supportPollFailures = window.HSgramSupportPolling.updateSupportPollFailureState({
+    failures: supportPollFailures,
+    error,
+    statusText: elements.supportStatusText,
+    maxFailures: 3,
+    retryDelayMs: 15000,
+    stopPolling: stopSupportPolling,
+    scheduleRetry: (delayMs) => window.setTimeout(() => {
+      if (state.token && state.activePanel === "support" && state.features.support) {
+        supportPollFailures = 0;
+        startSupportPolling();
+      }
+    }, delayMs),
+  });
 }
 
 function getVisibleSupportThreads() {
@@ -1747,6 +1829,10 @@ function renderSupportProfile(detail) {
 }
 
 async function sendSupportReply() {
+  if (!state.features.support) {
+    toast("当前部署未配置客服消息 RPC，无法回复");
+    return;
+  }
   if (!state.selectedSupportUserId) {
     toast("请先选择一个客服会话");
     return;
@@ -1773,7 +1859,7 @@ async function sendSupportReply() {
   } catch (error) {
     toast(error.message || "发送客服回复失败");
   } finally {
-    elements.supportReplyButton.disabled = !state.selectedSupportUserId;
+    elements.supportReplyButton.disabled = !state.features.support || !state.selectedSupportUserId;
   }
 }
 

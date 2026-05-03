@@ -225,6 +225,11 @@ func (h *Handler) handleReleasePublish(w http.ResponseWriter, r *http.Request, a
 		writeError(w, http.StatusInternalServerError, "publish release failed")
 		return
 	}
+	if err := h.writeLatestUpdateManifest(r, *release); err != nil {
+		log.Printf("admin-api: write latest release manifest failed: %v", err)
+		writeError(w, http.StatusInternalServerError, "publish release manifest failed")
+		return
+	}
 
 	var broadcastRecord *store.BroadcastRecord
 	var broadcastError string

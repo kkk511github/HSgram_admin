@@ -150,6 +150,68 @@ func loadManifestFile(path string, target any) error {
 	return nil
 }
 
+func (h *Handler) writeLatestUpdateManifest(r *http.Request, release store.AppRelease) error {
+	platform, err := store.NormalizeReleasePlatform(release.Platform)
+	if err != nil {
+		return err
+	}
+	if h.updates.ReleasesDir == "" {
+		return errors.New("releases dir is not configured")
+	}
+
+	downloadURL := h.releaseDownloadURL(r, release.StoragePath)
+	var payload any
+	switch platform {
+	case store.ReleasePlatformAndroid:
+		payload = androidUpdateManifest{
+			Version:     release.Version,
+			VersionCode: release.VersionCode,
+			FileURL:     downloadURL,
+			Changelog:   release.Changelog,
+		}
+	case store.ReleasePlatformPC:
+		payload = pcUpdateManifest{
+			Version:     release.Version,
+			VersionCode: release.VersionCode,
+			DownloadURL: downloadURL,
+			Changelog:   release.Changelog,
+		}
+	default:
+		return fmt.Errorf("unsupported platform: %s", platform)
+	}
+
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+
+	dir := filepath.Join(h.updates.ReleasesDir, platform)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	target := filepath.Join(dir, "latest.json")
+	tmp, err := os.CreateTemp(dir, ".latest-*.json")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	if err := os.Rename(tmpPath, target); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	return nil
+}
+
 func (h *Handler) resolvePublicURL(r *http.Request, raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {

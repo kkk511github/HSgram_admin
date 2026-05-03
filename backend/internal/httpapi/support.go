@@ -78,7 +78,7 @@ func (h *Handler) handleSupportThreadReply(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if h.msg == nil {
-		writeError(w, http.StatusServiceUnavailable, "message rpc unavailable")
+		writeErrorCode(w, http.StatusServiceUnavailable, "message_rpc_unavailable", "message rpc unavailable")
 		return
 	}
 
@@ -101,9 +101,11 @@ func (h *Handler) handleSupportThreadReply(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	_ = h.store.CreateAuditLog(r.Context(), admin, "support.reply", userID, map[string]any{
-		"message": messageText,
-	})
+	if h.store != nil {
+		_ = h.store.CreateAuditLog(r.Context(), admin, "support.reply", userID, map[string]any{
+			"message": messageText,
+		})
+	}
 
 	writeJSON(w, http.StatusOK, apiResponse{OK: true})
 }

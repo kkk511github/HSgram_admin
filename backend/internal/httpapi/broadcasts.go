@@ -119,13 +119,15 @@ func (h *Handler) handleBroadcastSend(w http.ResponseWriter, r *http.Request, ad
 		return
 	}
 
-	_ = h.store.CreateAuditLog(r.Context(), admin, "broadcast.enqueue", 0, map[string]any{
-		"broadcastId":  record.ID,
-		"targetType":   req.TargetType,
-		"targetCount":  preview.Count,
-		"messageText":  req.MessageText,
-		"senderUserId": store.BroadcastSystemUserID,
-	})
+	if h.store != nil {
+		_ = h.store.CreateAuditLog(r.Context(), admin, "broadcast.enqueue", 0, map[string]any{
+			"broadcastId":  record.ID,
+			"targetType":   req.TargetType,
+			"targetCount":  preview.Count,
+			"messageText":  req.MessageText,
+			"senderUserId": store.BroadcastSystemUserID,
+		})
+	}
 
 	writeJSON(w, http.StatusOK, apiResponse{
 		OK: true,
@@ -156,6 +158,6 @@ func (h *Handler) ensureBroadcastsEnabled(w http.ResponseWriter) bool {
 		return true
 	}
 
-	writeError(w, http.StatusServiceUnavailable, "broadcast feature is disabled")
+	writeErrorCode(w, http.StatusServiceUnavailable, "broadcast_unavailable", "broadcast feature is disabled")
 	return false
 }
