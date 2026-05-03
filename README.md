@@ -140,6 +140,29 @@ https://admin.example.com
 - 后台应用健康检查：`https://admin.example.com/api/healthz`
 - 反向代理健康检查：`https://admin.example.com/healthz`
 
+### 6. 运行时依赖与降级状态
+
+后台会根据实际 RPC 客户端是否可用返回 feature flags 和 degraded dependencies。缺少依赖时进程仍可启动，但对应功能会禁用或返回结构化 unavailable/degraded 响应，不会假成功。
+
+关键环境变量：
+
+| 变量 | 影响功能 | 未配置时行为 |
+|---|---|---|
+| `ADMIN_MSG_RPC_ADDR` | 客服回复、广播投递 | `/api/admin/me` 中 `features.support=false`；客服回复返回 `message_rpc_unavailable`；广播服务不可用 |
+| `ADMIN_ENABLE_BROADCASTS` | 广播入口 | 非 `true` 时广播入口禁用 |
+| `ADMIN_AUTHSESSION_RPC_ADDR` | 全量踢下线 / 重置授权 | 会话处理返回 `authsession_rpc_unavailable` degraded 标记 |
+| `ADMIN_SYNC_RPC_ADDR` | 后台弹窗、重置授权推送 | 相关会话操作返回 `sync_rpc_unavailable` 或 `sync_rpc_*_failed` |
+| `ADMIN_STATUS_RPC_ADDR` | 在线 auth key 查询 | 相关会话操作返回 `status_rpc_unavailable` 或 `status_rpc_failed` |
+| `ADMIN_GATEWAY_RPC_ADDR` | 实时断开连接 | 相关会话操作返回 `gateway_rpc_unavailable` 或 `gateway_rpc_failed` |
+
+可检查：
+
+```bash
+curl https://admin.example.com/api/healthz
+```
+
+返回中的 `dependencies` 会列出每个依赖的 `available` / `degraded` 状态。前端会据此禁用不可用操作入口或展示错误状态。
+
 ## OTA 更新源
 
 这版已经把最小 OTA 更新源接到了 `HSgram_admin`：
