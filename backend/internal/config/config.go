@@ -19,6 +19,8 @@ type Config struct {
 	RedisAddr          string
 	RedisPass          string
 	ReleasesDir        string
+	TelegramBotToken   string
+	StickerMinIO       StickerMinIOConfig
 	PublicBaseURL      string
 	JWTSecret          string
 	TokenTTL           time.Duration
@@ -26,6 +28,14 @@ type Config struct {
 	HTTPWriteTimeout   time.Duration
 	BootstrapUsername  string
 	BootstrapPassword  string
+}
+
+type StickerMinIOConfig struct {
+	Endpoint        string
+	AccessKeyID     string
+	SecretAccessKey string
+	UseSSL          bool
+	Bucket          string
 }
 
 func Load() (Config, error) {
@@ -56,13 +66,21 @@ func Load() (Config, error) {
 		RedisAddr:          strings.TrimSpace(getEnv("ADMIN_REDIS_ADDR", "redis:6379")),
 		RedisPass:          os.Getenv("ADMIN_REDIS_PASS"),
 		ReleasesDir:        strings.TrimSpace(getEnv("ADMIN_RELEASES_DIR", "./releases")),
-		PublicBaseURL:      strings.TrimRight(strings.TrimSpace(os.Getenv("ADMIN_PUBLIC_BASE_URL")), "/"),
-		JWTSecret:          os.Getenv("ADMIN_JWT_SECRET"),
-		TokenTTL:           tokenTTL,
-		HTTPReadTimeout:    httpReadTimeout,
-		HTTPWriteTimeout:   httpWriteTimeout,
-		BootstrapUsername:  getEnv("ADMIN_BOOTSTRAP_USERNAME", "admin"),
-		BootstrapPassword:  os.Getenv("ADMIN_BOOTSTRAP_PASSWORD"),
+		TelegramBotToken:   strings.TrimSpace(os.Getenv("ADMIN_TELEGRAM_BOT_TOKEN")),
+		StickerMinIO: StickerMinIOConfig{
+			Endpoint:        strings.TrimSpace(os.Getenv("ADMIN_STICKER_MINIO_ENDPOINT")),
+			AccessKeyID:     os.Getenv("ADMIN_STICKER_MINIO_ACCESS_KEY_ID"),
+			SecretAccessKey: os.Getenv("ADMIN_STICKER_MINIO_SECRET_ACCESS_KEY"),
+			UseSSL:          getEnvBool("ADMIN_STICKER_MINIO_USE_SSL", false),
+			Bucket:          strings.TrimSpace(getEnv("ADMIN_STICKER_MINIO_BUCKET", "documents")),
+		},
+		PublicBaseURL:     strings.TrimRight(strings.TrimSpace(os.Getenv("ADMIN_PUBLIC_BASE_URL")), "/"),
+		JWTSecret:         os.Getenv("ADMIN_JWT_SECRET"),
+		TokenTTL:          tokenTTL,
+		HTTPReadTimeout:   httpReadTimeout,
+		HTTPWriteTimeout:  httpWriteTimeout,
+		BootstrapUsername: getEnv("ADMIN_BOOTSTRAP_USERNAME", "admin"),
+		BootstrapPassword: os.Getenv("ADMIN_BOOTSTRAP_PASSWORD"),
 	}
 
 	if cfg.DatabaseDSN == "" {

@@ -23,6 +23,7 @@ import (
 	"hsgram-admin/backend/internal/messenger"
 	"hsgram-admin/backend/internal/risk"
 	"hsgram-admin/backend/internal/statusrpc"
+	stickerimport "hsgram-admin/backend/internal/stickers"
 	"hsgram-admin/backend/internal/store"
 	"hsgram-admin/backend/internal/syncrpc"
 	"hsgram-admin/backend/webui"
@@ -39,6 +40,7 @@ type Handler struct {
 	risk         *risk.Service
 	invites      *invitecodes.Service
 	msg          messageService
+	stickers     stickerService
 	updates      UpdateConfig
 	web          http.Handler
 	releases     http.Handler
@@ -47,6 +49,13 @@ type Handler struct {
 
 type messageService interface {
 	SendTextMessage(ctx context.Context, senderUserID, targetUserID int64, text string) error
+}
+
+type stickerService interface {
+	ImportTelegramSet(ctx context.Context, req stickerimport.ImportRequest) (*stickerimport.ImportResult, error)
+	ListSets(ctx context.Context) ([]stickerimport.SetSummary, error)
+	GetSet(ctx context.Context, id int64) (*stickerimport.SetDetail, error)
+	DisableSet(ctx context.Context, id int64) error
 }
 
 type broadcastService interface {
@@ -91,7 +100,7 @@ type dependencyState struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Service, authsessions *authsessionrpc.Client, syncClient *syncrpc.Client, statusClient *statusrpc.Client, gatewayClient *gatewayrpc.Client, riskService *risk.Service, inviteService *invitecodes.Service, msgClient *messenger.Client, updates UpdateConfig) http.Handler {
+func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Service, authsessions *authsessionrpc.Client, syncClient *syncrpc.Client, statusClient *statusrpc.Client, gatewayClient *gatewayrpc.Client, riskService *risk.Service, inviteService *invitecodes.Service, msgClient *messenger.Client, stickerSvc stickerService, updates UpdateConfig) http.Handler {
 	handler := &Handler{
 		tokens:   tokens,
 		store:    userStore,
@@ -120,6 +129,9 @@ func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Ser
 	if msgClient != nil {
 		handler.msg = msgClient
 	}
+	if stickerSvc != nil {
+		handler.stickers = stickerSvc
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/healthz", handler.handleHealthz)
@@ -143,6 +155,9 @@ func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Ser
 	mux.Handle("/api/admin/broadcasts/preview", handler.requireSuperAdmin(handler.handleBroadcastPreview))
 	mux.Handle("/api/admin/broadcasts", handler.requireSuperAdmin(handler.handleBroadcastRoutes))
 	mux.Handle("/api/admin/broadcasts/", handler.requireSuperAdmin(handler.handleBroadcastRoutes))
+	mux.Handle("/api/admin/stickers/import", handler.requireSuperAdmin(handler.handleStickerImport))
+	mux.Handle("/api/admin/stickers/sets", handler.requireSuperAdmin(handler.handleStickerSets))
+	mux.Handle("/api/admin/stickers/sets/", handler.requireSuperAdmin(handler.handleStickerSetRoutes))
 	mux.HandleFunc("/td/current", handler.handleTDesktopCurrent)
 	mux.Handle("/releases/", handler.releases)
 	mux.Handle("/", handler.web)

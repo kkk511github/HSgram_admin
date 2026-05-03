@@ -17,6 +17,7 @@ import (
 	"hsgram-admin/backend/internal/messenger"
 	"hsgram-admin/backend/internal/risk"
 	"hsgram-admin/backend/internal/statusrpc"
+	"hsgram-admin/backend/internal/stickers"
 	"hsgram-admin/backend/internal/store"
 	"hsgram-admin/backend/internal/syncrpc"
 
@@ -37,6 +38,7 @@ type App struct {
 	broadcaster       *broadcast.Service
 	riskService       *risk.Service
 	inviteCodes       *invitecodes.Service
+	stickerImporter   *stickers.Service
 	handler           http.Handler
 }
 
@@ -63,6 +65,26 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		return nil, err
 	}
 	if err := userStore.EnsureReleaseSchema(ctx); err != nil {
+		_ = userStore.Close()
+		return nil, err
+	}
+	stickerStorage, err := stickers.NewMinIOStorage(stickers.MinIOConfig{
+		Endpoint:        cfg.StickerMinIO.Endpoint,
+		AccessKeyID:     cfg.StickerMinIO.AccessKeyID,
+		SecretAccessKey: cfg.StickerMinIO.SecretAccessKey,
+		UseSSL:          cfg.StickerMinIO.UseSSL,
+		Bucket:          cfg.StickerMinIO.Bucket,
+	})
+	if err != nil {
+		_ = userStore.Close()
+		return nil, err
+	}
+	stickerImporter, err := stickers.New(ctx, stickers.Config{
+		DatabaseDSN:      cfg.DatabaseDSN,
+		TelegramBotToken: cfg.TelegramBotToken,
+		Storage:          stickerStorage,
+	})
+	if err != nil {
 		_ = userStore.Close()
 		return nil, err
 	}
@@ -196,7 +218,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		log.Printf("admin-api: ADMIN_GATEWAY_RPC_ADDR is empty; online socket disconnect will be disabled")
 	}
 
-	handler := httpapi.New(tokenMgr, userStore, broadcaster, authsessionClient, syncClient, statusClient, gatewayClient, riskService, inviteService, msgClient, httpapi.UpdateConfig{
+	handler := httpapi.New(tokenMgr, userStore, broadcaster, authsessionClient, syncClient, statusClient, gatewayClient, riskService, inviteService, msgClient, stickerImporter, httpapi.UpdateConfig{
 		ReleasesDir:   cfg.ReleasesDir,
 		PublicBaseURL: cfg.PublicBaseURL,
 	})
@@ -213,6 +235,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		broadcaster:       broadcaster,
 		riskService:       riskService,
 		inviteCodes:       inviteService,
+		stickerImporter:   stickerImporter,
 		handler:           handler,
 	}, nil
 }
@@ -285,6 +308,12 @@ func (a *App) Close() error {
 	}
 	if a.gatewayClient != nil {
 		if err := a.gatewayClient.Close(); err != nil {
+			_ = a.store.Close()
+			return err
+		}
+	}
+	if a.stickerImporter != nil {
+		if err := a.stickerImporter.Close(); err != nil {
 			_ = a.store.Close()
 			return err
 		}

@@ -21,6 +21,7 @@
 - `healthz` 健康检查
 - 登录失败限流
 - Android / PC 公共 OTA manifest 与制品下载入口
+- 授权 Telegram sticker set 导入 API
 - Docker 化部署
 - Caddy 反向代理和 HTTPS 入口
 
@@ -154,6 +155,19 @@ https://admin.example.com
 | `ADMIN_SYNC_RPC_ADDR` | 后台弹窗、重置授权推送 | 相关会话操作返回 `sync_rpc_unavailable` 或 `sync_rpc_*_failed` |
 | `ADMIN_STATUS_RPC_ADDR` | 在线 auth key 查询 | 相关会话操作返回 `status_rpc_unavailable` 或 `status_rpc_failed` |
 | `ADMIN_GATEWAY_RPC_ADDR` | 实时断开连接 | 相关会话操作返回 `gateway_rpc_unavailable` 或 `gateway_rpc_failed` |
+
+贴纸导入额外依赖：
+
+| 变量 | 影响功能 | 未配置时行为 |
+|---|---|---|
+| `ADMIN_TELEGRAM_BOT_TOKEN` | 调 Telegram Bot API 读取授权 sticker set 元数据和临时下载地址 | `/api/admin/stickers/import` 返回 `sticker_import_unavailable` |
+| `ADMIN_STICKER_MINIO_ENDPOINT` | 导入文件写入 HSgram 自有 documents bucket | 导入不可用 |
+| `ADMIN_STICKER_MINIO_ACCESS_KEY_ID` | MinIO/S3 访问密钥 | 导入不可用或写入失败 |
+| `ADMIN_STICKER_MINIO_SECRET_ACCESS_KEY` | MinIO/S3 访问密钥 | 导入不可用或写入失败 |
+| `ADMIN_STICKER_MINIO_USE_SSL` | 是否使用 HTTPS 连接 MinIO/S3 | 默认 `false` |
+| `ADMIN_STICKER_MINIO_BUCKET` | 贴纸文件写入 bucket，需与 DFS documents bucket 一致 | 默认 `documents` |
+
+贴纸导入只允许用于自有、已授权或用户主动提交并明确授权的 sticker set。导入流程会使用 Telegram `getFile` 地址作为一次性下载来源，但文件会落到 HSgram 自有 storage，不会热链 Telegram 文件；不要用该接口爬取或批量导入未授权 Telegram 全网素材。
 
 可检查：
 
