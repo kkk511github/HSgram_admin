@@ -215,3 +215,18 @@ func TestSessionRPCSuccessAndFailurePathsAreObservable(t *testing.T) {
 		t.Fatalf("expected gateway failure degraded marker, got %v", degraded)
 	}
 }
+
+func TestAdminOperationPopupMessagesAreReadable(t *testing.T) {
+	if banPopupMessage != "该账号已被封禁，如有疑问请联系客服" {
+		t.Fatalf("unexpected ban popup message: %q", banPopupMessage)
+	}
+	if unbanPopupMessage != "该账号已解封，可以正常使用" {
+		t.Fatalf("unexpected unban popup message: %q", unbanPopupMessage)
+	}
+	if got := kickPopupMessage(300); got != "您已被管理员踢下线，5 分钟内暂时无法登录" {
+		t.Fatalf("unexpected kick popup message: %q", got)
+	}
+	if got := kickPopupMessage(0); got != "您已被管理员踢下线" {
+		t.Fatalf("unexpected kick popup message without block: %q", got)
+	}
+}

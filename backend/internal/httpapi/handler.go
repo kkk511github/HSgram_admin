@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -398,6 +400,22 @@ func (h *Handler) pushAdminPopup(ctx context.Context, userID int64, message stri
 	return nil
 }
 
+const (
+	banPopupMessage   = "该账号已被封禁，如有疑问请联系客服"
+	unbanPopupMessage = "该账号已解封，可以正常使用"
+)
+
+func kickPopupMessage(blockSeconds int) string {
+	if blockSeconds <= 0 {
+		return "您已被管理员踢下线"
+	}
+	minutes := int(math.Ceil(float64(blockSeconds) / 60.0))
+	if minutes < 1 {
+		minutes = 1
+	}
+	return fmt.Sprintf("您已被管理员踢下线，%d 分钟内暂时无法登录", minutes)
+}
+
 func (h *Handler) pushResetAuthorization(ctx context.Context, userID int64, keyIDs []int64) []string {
 	if h.sync == nil || len(keyIDs) == 0 {
 		return nil
@@ -445,7 +463,7 @@ func (h *Handler) handleBan(w http.ResponseWriter, r *http.Request, admin store.
 	}
 
 	onlineKeyIDs, statusDegraded := h.onlineAuthKeyIDs(r.Context(), userID)
-	popupDegraded := h.pushAdminPopup(r.Context(), userID, "该账号已被封禁")
+	popupDegraded := h.pushAdminPopup(r.Context(), userID, banPopupMessage)
 	resetKeyIDs, revokeDegraded, err := h.revokeUserSessions(r.Context(), userID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "ban user failed")
@@ -498,13 +516,21 @@ func (h *Handler) handleUnban(w http.ResponseWriter, r *http.Request, admin stor
 		_ = h.risk.ClearKickLoginBlock(r.Context(), userID)
 	}
 
-	_ = h.store.CreateAuditLog(r.Context(), admin, "user.unban", userID, nil)
+	popupDegraded := h.pushAdminPopup(r.Context(), userID, unbanPopupMessage)
 
-	writeUnbanSuccess(w)
+	_ = h.store.CreateAuditLog(r.Context(), admin, "user.unban", userID, map[string]any{
+		"degraded": popupDegraded,
+	})
+
+	writeUnbanSuccess(w, popupDegraded)
 }
 
-func writeUnbanSuccess(w http.ResponseWriter) {
-	writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: map[string]any{"message": "该账号已解封"}})
+func writeUnbanSuccess(w http.ResponseWriter, degraded []string) {
+	writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: map[string]any{
+		"message":        "该账号已解封",
+		"popupDelivered": len(degraded) == 0,
+		"degraded":       degraded,
+	}})
 }
 
 func (h *Handler) handleKickSessions(w http.ResponseWriter, r *http.Request, admin store.AdminUser, userID int64) {
@@ -518,7 +544,7 @@ func (h *Handler) handleKickSessions(w http.ResponseWriter, r *http.Request, adm
 		_ = h.risk.SetKickLoginBlock(r.Context(), userID, time.Duration(settings.KickLoginBlockSeconds)*time.Second)
 	}
 	onlineKeyIDs, statusDegraded := h.onlineAuthKeyIDs(r.Context(), userID)
-	popupDegraded := h.pushAdminPopup(r.Context(), userID, "您已被管理员踢下线")
+	popupDegraded := h.pushAdminPopup(r.Context(), userID, kickPopupMessage(settings.KickLoginBlockSeconds))
 	resetKeyIDs, revokeDegraded, err := h.revokeUserSessions(r.Context(), userID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "kick sessions failed")

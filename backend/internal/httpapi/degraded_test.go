@@ -90,7 +90,7 @@ func TestSessionOperationsReportMissingDependencies(t *testing.T) {
 func TestUnbanSuccessResponseMessageIsReadable(t *testing.T) {
 	rec := httptest.NewRecorder()
 
-	writeUnbanSuccess(rec)
+	writeUnbanSuccess(rec, []string{"sync_rpc_popup_failed"})
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("unexpected status: %d body=%s", rec.Code, rec.Body.String())
@@ -105,5 +105,8 @@ func TestUnbanSuccessResponseMessageIsReadable(t *testing.T) {
 	data := response.Data.(map[string]any)
 	if data["message"] != "该账号已解封" {
 		t.Fatalf("unexpected unban message: %#v", data["message"])
+	}
+	if data["popupDelivered"] != false {
+		t.Fatalf("expected popupDelivered=false when popup is degraded, got %#v", data["popupDelivered"])
 	}
 }
