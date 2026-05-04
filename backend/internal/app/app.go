@@ -15,7 +15,6 @@ import (
 	"hsgram-admin/backend/internal/httpapi"
 	"hsgram-admin/backend/internal/invitecodes"
 	"hsgram-admin/backend/internal/messenger"
-	"hsgram-admin/backend/internal/reactions"
 	"hsgram-admin/backend/internal/risk"
 	"hsgram-admin/backend/internal/statusrpc"
 	"hsgram-admin/backend/internal/stickers"
@@ -40,7 +39,6 @@ type App struct {
 	riskService       *risk.Service
 	inviteCodes       *invitecodes.Service
 	stickerImporter   *stickers.Service
-	reactionConfig    *reactions.Service
 	handler           http.Handler
 }
 
@@ -90,16 +88,8 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		_ = userStore.Close()
 		return nil, err
 	}
-	reactionConfig, err := reactions.New(ctx, cfg.DatabaseDSN)
-	if err != nil {
-		_ = stickerImporter.Close()
-		_ = userStore.Close()
-		return nil, err
-	}
 	if err := userStore.EnsureBootstrapAdmin(ctx, cfg.BootstrapUsername, cfg.BootstrapPassword); err != nil {
-		if reactionConfig != nil {
-			_ = reactionConfig.Close()
-		}
+		_ = stickerImporter.Close()
 		_ = userStore.Close()
 		return nil, err
 	}
@@ -229,7 +219,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		log.Printf("admin-api: ADMIN_GATEWAY_RPC_ADDR is empty; online socket disconnect will be disabled")
 	}
 
-	handler := httpapi.New(tokenMgr, userStore, broadcaster, authsessionClient, syncClient, statusClient, gatewayClient, riskService, inviteService, msgClient, stickerImporter, reactionConfig, httpapi.UpdateConfig{
+	handler := httpapi.New(tokenMgr, userStore, broadcaster, authsessionClient, syncClient, statusClient, gatewayClient, riskService, inviteService, msgClient, stickerImporter, httpapi.UpdateConfig{
 		ReleasesDir:   cfg.ReleasesDir,
 		PublicBaseURL: cfg.PublicBaseURL,
 	})
@@ -247,7 +237,6 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		riskService:       riskService,
 		inviteCodes:       inviteService,
 		stickerImporter:   stickerImporter,
-		reactionConfig:    reactionConfig,
 		handler:           handler,
 	}, nil
 }
@@ -326,12 +315,6 @@ func (a *App) Close() error {
 	}
 	if a.stickerImporter != nil {
 		if err := a.stickerImporter.Close(); err != nil {
-			_ = a.store.Close()
-			return err
-		}
-	}
-	if a.reactionConfig != nil {
-		if err := a.reactionConfig.Close(); err != nil {
 			_ = a.store.Close()
 			return err
 		}

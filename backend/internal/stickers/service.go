@@ -552,9 +552,16 @@ func importHash(set TelegramStickerSet, stickers []importSticker) int64 {
 
 func normalizeShortName(value string) string {
 	value = strings.TrimSpace(value)
-	value = strings.TrimPrefix(value, "https://t.me/addstickers/")
-	value = strings.TrimPrefix(value, "http://t.me/addstickers/")
-	value = strings.TrimPrefix(value, "t.me/addstickers/")
+	for _, prefix := range []string{
+		"https://t.me/addstickers/",
+		"http://t.me/addstickers/",
+		"t.me/addstickers/",
+		"https://t.me/addemoji/",
+		"http://t.me/addemoji/",
+		"t.me/addemoji/",
+	} {
+		value = strings.TrimPrefix(value, prefix)
+	}
 	return strings.ToLower(strings.Trim(value, "/"))
 }
 

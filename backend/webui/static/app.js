@@ -556,7 +556,7 @@ async function importStickerSet() {
   const source = elements.stickerSourceInput.value.trim() || "authorized";
   const authorizationStatement = elements.stickerAuthorizationInput.value.trim();
   if (!shortName) {
-    toast("请填写贴纸包链接或 short name");
+    toast("请填写贴纸 / 表情包链接或 short name");
     return;
   }
   if (!authorizationStatement) {

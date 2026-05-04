@@ -155,6 +155,23 @@ func TestImportTelegramSetRequiresAuthorizationStatement(t *testing.T) {
 	}
 }
 
+func TestNormalizeShortNameAcceptsStickerAndEmojiLinks(t *testing.T) {
+	tests := map[string]string{
+		"licensed_set":                          "licensed_set",
+		"https://t.me/addstickers/licensed_set": "licensed_set",
+		"http://t.me/addstickers/licensed_set/": "licensed_set",
+		"t.me/addstickers/licensed_set":         "licensed_set",
+		"https://t.me/addemoji/CreepyEmoji":     "creepyemoji",
+		"http://t.me/addemoji/CreepyEmoji/":     "creepyemoji",
+		"t.me/addemoji/CreepyEmoji":             "creepyemoji",
+	}
+	for input, want := range tests {
+		if got := normalizeShortName(input); got != want {
+			t.Fatalf("normalizeShortName(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
 func expectImportSQL(mock sqlmock.Sqlmock, setID, stickerID, setAccessHash int64, duplicate bool) {
 	mock.ExpectBegin()
 	resultSetID := setID

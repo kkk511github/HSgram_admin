@@ -27,7 +27,7 @@ func TestFeaturesReflectRuntimeDependencies(t *testing.T) {
 }
 
 func TestHealthzReportsDegradedDependencies(t *testing.T) {
-	handler := New(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, UpdateConfig{
+	handler := New(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, UpdateConfig{
 		ReleasesDir: t.TempDir(),
 	})
 
