@@ -463,9 +463,13 @@ func insertDocumentRow(ctx context.Context, tx *sql.Tx, stickerID, accessHash in
 	displayName := stickerDisplayFileName(stickerID, st.MimeType)
 	attrs := []*mtproto.DocumentAttribute{
 		mtproto.MakeTLDocumentAttributeImageSize(&mtproto.DocumentAttribute{W: st.Width, H: st.Height}).To_DocumentAttribute(),
-		mtproto.MakeTLDocumentAttributeSticker(&mtproto.DocumentAttribute{Alt: st.Emoji, Stickerset: inputSet}).To_DocumentAttribute(),
-		mtproto.MakeTLDocumentAttributeFilename(&mtproto.DocumentAttribute{FileName: displayName}).To_DocumentAttribute(),
 	}
+	if normalizeStickerType(st.Type) == "custom_emoji" {
+		attrs = append(attrs, mtproto.MakeTLDocumentAttributeCustomEmoji(&mtproto.DocumentAttribute{Free: true, Alt: st.Emoji, Stickerset: inputSet}).To_DocumentAttribute())
+	} else {
+		attrs = append(attrs, mtproto.MakeTLDocumentAttributeSticker(&mtproto.DocumentAttribute{Alt: st.Emoji, Stickerset: inputSet}).To_DocumentAttribute())
+	}
+	attrs = append(attrs, mtproto.MakeTLDocumentAttributeFilename(&mtproto.DocumentAttribute{FileName: displayName}).To_DocumentAttribute())
 	attrJSON, _ := jsonx.Marshal(attrs)
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO documents (document_id, access_hash, dc_id, file_path, file_size, uploaded_file_name, ext, mime_type, thumb_id, video_thumb_id, attributes, date2)
