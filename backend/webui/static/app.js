@@ -134,6 +134,11 @@ const elements = {
   broadcastHistoryList: document.getElementById("broadcastHistoryList"),
   broadcastDetailList: document.getElementById("broadcastDetailList"),
   releasePlatform: document.getElementById("releasePlatform"),
+  releaseChannel: document.getElementById("releaseChannel"),
+  releaseArch: document.getElementById("releaseArch"),
+  releaseUpdateLevel: document.getElementById("releaseUpdateLevel"),
+  releaseMinSupportedVersionCode: document.getElementById("releaseMinSupportedVersionCode"),
+  releaseTitle: document.getElementById("releaseTitle"),
   releaseVersion: document.getElementById("releaseVersion"),
   releaseVersionCode: document.getElementById("releaseVersionCode"),
   releaseChangelog: document.getElementById("releaseChangelog"),
@@ -220,6 +225,7 @@ elements.broadcastSendButton.addEventListener("click", sendBroadcast);
 elements.releaseUploadButton.addEventListener("click", uploadRelease);
 elements.releasePublishButton.addEventListener("click", publishSelectedRelease);
 elements.releaseNotifyUsers.addEventListener("change", syncReleaseBroadcastFields);
+elements.releasePlatform.addEventListener("change", syncReleasePlatformFields);
 elements.stickerImportButton.addEventListener("click", importStickerSet);
 elements.stickerRefreshButton.addEventListener("click", () => loadStickerSets().catch((error) => toast(error.message || "加载贴纸包失败")));
 elements.searchInput.addEventListener("keydown", (event) => {
@@ -229,6 +235,7 @@ elements.searchInput.addEventListener("keydown", (event) => {
 });
 
 bootstrap();
+syncReleasePlatformFields();
 
 async function bootstrap() {
   if (!state.token) {
@@ -463,7 +470,8 @@ function renderReleases() {
     }
     item.innerHTML = `
       <div class="list-item-title">#${release.id} ${escapeHTML(release.platform)} ${escapeHTML(release.version)}</div>
-      <div>版本编码: ${release.versionCode} | 状态: ${escapeHTML(release.status)}${release.isLatest ? " | 当前最新" : ""}</div>
+      <div>versionCode: ${release.versionCode} | ${escapeHTML(release.channel || "stable")} / ${escapeHTML(release.arch || "universal")} | ${escapeHTML(release.updateLevel || "optional")}</div>
+      <div>Status: ${escapeHTML(release.status)}${release.isLatest ? " | latest" : ""}</div>
       <div>文件: ${escapeHTML(release.filename)} | 大小: ${formatFileSize(release.fileSize)}</div>
     `;
     item.addEventListener("click", () => loadReleaseDetail(release.id));
@@ -496,14 +504,21 @@ function renderReleaseDetail(release) {
   item.innerHTML = `
     <div class="list-item-title">${escapeHTML(release.platform)} ${escapeHTML(release.version)}${release.isLatest ? "（当前最新）" : ""}</div>
     <div>版本编码: ${release.versionCode}</div>
+    <div>Min supported versionCode: ${Number(release.minSupportedVersionCode || 0)}</div>
+    <div>Channel / Arch: ${escapeHTML(release.channel || "stable")} / ${escapeHTML(release.arch || "universal")}</div>
+    <div>Update level: ${escapeHTML(release.updateLevel || "optional")}</div>
+    <div>Title: ${escapeHTML(release.title || "-")}</div>
     <div>状态: ${escapeHTML(release.status)}</div>
     <div>文件: ${escapeHTML(release.filename)}</div>
     <div>大小: ${formatFileSize(release.fileSize)}</div>
     <div>SHA256: ${escapeHTML(release.sha256 || "-")}</div>
+    <div>MIME: ${escapeHTML(release.mimeType || "-")}</div>
+    <div>Storage key: ${escapeHTML(release.storageKey || release.storagePath || "-")}</div>
     <div>上传者: ${escapeHTML(release.createdByUsername || "-")} (${escapeHTML(release.createdByRole || "-")})</div>
     <div>上传时间: ${formatDateTime(release.createdAt)}</div>
     <div>发布时间: ${formatDateTime(release.publishedAt)}</div>
     <div>下载地址: <a class="link-text" href="${escapeHTML(release.downloadUrl)}" target="_blank" rel="noopener noreferrer">打开下载链接</a></div>
+    <div>Public link: <a class="link-text" href="${escapeHTML(release.publicDownloadUrl || release.downloadUrl)}" target="_blank" rel="noopener noreferrer">${escapeHTML(release.publicDownloadUrl || release.downloadUrl || "-")}</a></div>
     <div>更新说明: ${escapeHTML(release.changelog || "-")}</div>
   `;
   elements.releaseDetailList.appendChild(item);
@@ -549,6 +564,21 @@ function renderStickerSets(error) {
     `;
     elements.stickerSetsList.appendChild(item);
   });
+}
+
+function syncReleasePlatformFields() {
+  const platform = elements.releasePlatform.value;
+  if (platform === "android") {
+    elements.releaseFile.accept = ".apk,application/vnd.android.package-archive";
+    if (!elements.releaseArch.value || elements.releaseArch.value.startsWith("win-")) {
+      elements.releaseArch.value = "universal";
+    }
+  } else {
+    elements.releaseFile.accept = ".exe,application/vnd.microsoft.portable-executable,application/octet-stream";
+    if (!elements.releaseArch.value || ["arm64-v8a", "armeabi-v7a", "x86_64"].includes(elements.releaseArch.value)) {
+      elements.releaseArch.value = "win-x64";
+    }
+  }
 }
 
 async function importStickerSet() {
@@ -616,6 +646,11 @@ function renderUploadProgress() {
   elements.releaseUploadButton.disabled = busy;
   elements.releasePublishButton.disabled = busy || !state.selectedReleaseId;
   elements.releasePlatform.disabled = busy;
+  elements.releaseChannel.disabled = busy;
+  elements.releaseArch.disabled = busy;
+  elements.releaseUpdateLevel.disabled = busy;
+  elements.releaseMinSupportedVersionCode.disabled = busy;
+  elements.releaseTitle.disabled = busy;
   elements.releaseVersion.disabled = busy;
   elements.releaseVersionCode.disabled = busy;
   elements.releaseChangelog.disabled = busy;
@@ -639,6 +674,11 @@ async function uploadRelease() {
 
   const formData = new FormData();
   formData.append("platform", elements.releasePlatform.value);
+  formData.append("channel", elements.releaseChannel.value);
+  formData.append("arch", elements.releaseArch.value);
+  formData.append("updateLevel", elements.releaseUpdateLevel.value);
+  formData.append("minSupportedVersionCode", elements.releaseMinSupportedVersionCode.value.trim() || "0");
+  formData.append("title", elements.releaseTitle.value.trim());
   formData.append("version", elements.releaseVersion.value.trim());
   formData.append("versionCode", elements.releaseVersionCode.value.trim());
   formData.append("changelog", elements.releaseChangelog.value.trim());
@@ -657,6 +697,7 @@ async function uploadRelease() {
     state.uploadProgress = 100;
     renderUploadProgress();
     elements.releaseFile.value = "";
+    elements.releaseTitle.value = "";
     await loadReleases();
     if (payload.data && payload.data.id) {
       await loadReleaseDetail(payload.data.id);

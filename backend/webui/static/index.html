@@ -431,8 +431,50 @@
                     平台
                     <select id="releasePlatform">
                       <option value="android">Android</option>
-                      <option value="pc">PC</option>
+                      <option value="windows">Windows</option>
                     </select>
+                  </label>
+
+                  <div class="filter-grid">
+                    <label>
+                      Channel
+                      <select id="releaseChannel">
+                        <option value="stable">stable</option>
+                        <option value="beta">beta</option>
+                        <option value="internal">internal</option>
+                      </select>
+                    </label>
+                    <label>
+                      Arch
+                      <select id="releaseArch">
+                        <option value="universal">universal</option>
+                        <option value="arm64-v8a">arm64-v8a</option>
+                        <option value="armeabi-v7a">armeabi-v7a</option>
+                        <option value="x86_64">x86_64</option>
+                        <option value="win-x64">win-x64</option>
+                        <option value="win-arm64">win-arm64</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div class="filter-grid">
+                    <label>
+                      Update level
+                      <select id="releaseUpdateLevel">
+                        <option value="optional">optional</option>
+                        <option value="recommended">recommended</option>
+                        <option value="required">required</option>
+                      </select>
+                    </label>
+                    <label>
+                      Min supported versionCode
+                      <input id="releaseMinSupportedVersionCode" type="number" min="0" step="1" value="0" />
+                    </label>
+                  </div>
+
+                  <label>
+                    Title
+                    <input id="releaseTitle" placeholder="HSgram 1.2.4" />
                   </label>
 
                   <div class="filter-grid">

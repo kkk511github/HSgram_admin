@@ -137,6 +137,7 @@ func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Ser
 	mux.HandleFunc("/api/healthz", handler.handleHealthz)
 	mux.HandleFunc("/api/updates/android/latest", handler.handleAndroidUpdateLatest)
 	mux.HandleFunc("/api/updates/pc/latest", handler.handlePCUpdateLatest)
+	mux.HandleFunc("/api/updates/windows/latest", handler.handlePCUpdateLatest)
 	mux.HandleFunc("/api/admin/login", handler.handleLogin)
 	mux.Handle("/api/admin/me", handler.requireAuth(handler.handleMe))
 	mux.Handle("/api/admin/releases/upload", handler.requireSuperAdmin(handler.handleReleaseUpload))

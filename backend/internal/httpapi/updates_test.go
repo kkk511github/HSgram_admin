@@ -35,7 +35,7 @@ func TestAndroidLatestManifestUsesPublicBaseURL(t *testing.T) {
 		t.Fatalf("unexpected status: %d body=%s", rec.Code, rec.Body.String())
 	}
 
-	var manifest androidUpdateManifest
+	var manifest updateManifest
 	if err := json.NewDecoder(rec.Body).Decode(&manifest); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestWriteLatestUpdateManifestMatchesPublicLatestShape(t *testing.T) {
 		t.Fatalf("write manifest: %v", err)
 	}
 
-	var manifest androidUpdateManifest
+	var manifest updateManifest
 	if err := loadManifestFile(filepath.Join(releasesDir, "android", "latest.json"), &manifest); err != nil {
 		t.Fatalf("load manifest: %v", err)
 	}

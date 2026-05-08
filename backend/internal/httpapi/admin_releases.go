@@ -49,12 +49,36 @@ func (h *Handler) handleReleaseUpload(w http.ResponseWriter, r *http.Request, ad
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	channel, err := store.NormalizeReleaseChannel(r.FormValue("channel"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	arch, err := store.NormalizeReleaseArch(platform, r.FormValue("arch"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	updateLevel, err := store.NormalizeReleaseUpdateLevel(r.FormValue("updateLevel"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	version := strings.TrimSpace(r.FormValue("version"))
 	versionCode, err := strconv.Atoi(strings.TrimSpace(r.FormValue("versionCode")))
 	if err != nil || versionCode <= 0 {
 		writeError(w, http.StatusBadRequest, "versionCode must be a positive integer")
 		return
 	}
+	minSupportedVersionCode := 0
+	if raw := strings.TrimSpace(r.FormValue("minSupportedVersionCode")); raw != "" {
+		minSupportedVersionCode, err = strconv.Atoi(raw)
+		if err != nil || minSupportedVersionCode < 0 {
+			writeError(w, http.StatusBadRequest, "minSupportedVersionCode must be zero or a positive integer")
+			return
+		}
+	}
+	title := strings.TrimSpace(r.FormValue("title"))
 	changelog := strings.TrimSpace(r.FormValue("changelog"))
 
 	file, header, err := r.FormFile("file")
@@ -70,11 +94,13 @@ func (h *Handler) handleReleaseUpload(w http.ResponseWriter, r *http.Request, ad
 	}
 	defer file.Close()
 
-	storagePath, filename, err := h.prepareReleasePath(platform, version, header)
+	storagePath, filename, mimeType, err := h.prepareReleasePath(platform, channel, arch, version, header)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	relativeDownloadURL := "/releases/" + strings.TrimLeft(storagePath, "/")
+	publicDownloadURL := h.resolvePublicURL(r, relativeDownloadURL)
 
 	fileSize, sha256Hex, err := h.writeUploadedRelease(storagePath, file)
 	if err != nil {
@@ -89,14 +115,23 @@ func (h *Handler) handleReleaseUpload(w http.ResponseWriter, r *http.Request, ad
 	}
 
 	release, err := h.store.CreateAppRelease(r.Context(), admin, store.CreateAppReleaseParams{
-		Platform:    platform,
-		Version:     version,
-		VersionCode: versionCode,
-		Filename:    filename,
-		StoragePath: storagePath,
-		FileSize:    fileSize,
-		SHA256:      sha256Hex,
-		Changelog:   changelog,
+		Platform:                platform,
+		Channel:                 channel,
+		Arch:                    arch,
+		Version:                 version,
+		VersionCode:             versionCode,
+		MinSupportedVersionCode: minSupportedVersionCode,
+		UpdateLevel:             updateLevel,
+		Title:                   title,
+		Filename:                filename,
+		StoragePath:             storagePath,
+		StorageKey:              storagePath,
+		FileSize:                fileSize,
+		SHA256:                  sha256Hex,
+		MimeType:                mimeType,
+		DownloadURL:             relativeDownloadURL,
+		PublicDownloadURL:       publicDownloadURL,
+		Changelog:               changelog,
 	})
 	if err != nil {
 		_ = os.Remove(filepath.Join(h.updates.ReleasesDir, filepath.FromSlash(storagePath)))
@@ -113,6 +148,8 @@ func (h *Handler) handleReleaseUpload(w http.ResponseWriter, r *http.Request, ad
 	_ = h.store.CreateAuditLog(r.Context(), admin, "release.upload", 0, map[string]any{
 		"releaseId":   release.ID,
 		"platform":    release.Platform,
+		"channel":     release.Channel,
+		"arch":        release.Arch,
 		"version":     release.Version,
 		"versionCode": release.VersionCode,
 		"filename":    release.Filename,
@@ -252,6 +289,8 @@ func (h *Handler) handleReleasePublish(w http.ResponseWriter, r *http.Request, a
 	metadata := map[string]any{
 		"releaseId":   release.ID,
 		"platform":    release.Platform,
+		"channel":     release.Channel,
+		"arch":        release.Arch,
 		"version":     release.Version,
 		"versionCode": release.VersionCode,
 		"notifyUsers": req.NotifyUsers,
@@ -280,38 +319,49 @@ func (h *Handler) handleReleasePublish(w http.ResponseWriter, r *http.Request, a
 	})
 }
 
-func (h *Handler) prepareReleasePath(platform, version string, header *multipart.FileHeader) (string, string, error) {
+func (h *Handler) prepareReleasePath(platform, channel, arch, version string, header *multipart.FileHeader) (string, string, string, error) {
 	version = sanitizeReleaseToken(version)
 	if version == "" {
-		return "", "", fmt.Errorf("version is required")
+		return "", "", "", fmt.Errorf("version is required")
+	}
+	channel = sanitizeReleaseToken(channel)
+	arch = sanitizeReleaseToken(arch)
+	if channel == "" {
+		channel = store.ReleaseChannelStable
+	}
+	if arch == "" {
+		arch = store.ReleaseArchUniversal
 	}
 
 	ext := strings.ToLower(filepath.Ext(header.Filename))
+	mimeType := "application/octet-stream"
 	switch platform {
 	case store.ReleasePlatformAndroid:
 		if ext != ".apk" {
-			return "", "", fmt.Errorf("android release must be an .apk file")
+			return "", "", "", fmt.Errorf("android release must be an .apk file")
 		}
-	case store.ReleasePlatformPC:
-		if ext == "" {
-			return "", "", fmt.Errorf("pc release file must have an extension")
+		mimeType = "application/vnd.android.package-archive"
+	case store.ReleasePlatformWindows:
+		if ext != ".exe" {
+			return "", "", "", fmt.Errorf("windows release must be an .exe file")
 		}
+		mimeType = "application/vnd.microsoft.portable-executable"
 	}
 
-	baseName := fmt.Sprintf("HSgram-%s-%s%s", platform, version, ext)
+	baseName := fmt.Sprintf("HSgram-%s-%s-%s-%s%s", platform, channel, arch, version, ext)
 	baseName = sanitizeFilename(baseName)
 	if baseName == "" {
-		return "", "", fmt.Errorf("invalid release filename")
+		return "", "", "", fmt.Errorf("invalid release filename")
 	}
 
-	storagePath := filepath.ToSlash(filepath.Join(platform, baseName))
+	storagePath := filepath.ToSlash(filepath.Join(platform, channel, arch, baseName))
 	absolutePath := filepath.Join(h.updates.ReleasesDir, filepath.FromSlash(storagePath))
 	if _, err := os.Stat(absolutePath); err == nil {
 		nameOnly := strings.TrimSuffix(baseName, ext)
 		baseName = fmt.Sprintf("%s-%d%s", nameOnly, time.Now().Unix(), ext)
-		storagePath = filepath.ToSlash(filepath.Join(platform, baseName))
+		storagePath = filepath.ToSlash(filepath.Join(platform, channel, arch, baseName))
 	}
-	return storagePath, baseName, nil
+	return storagePath, baseName, mimeType, nil
 }
 
 func (h *Handler) writeUploadedRelease(storagePath string, src multipart.File) (int64, string, error) {
@@ -349,24 +399,32 @@ func (h *Handler) writeUploadedRelease(storagePath string, src multipart.File) (
 
 func (h *Handler) releasePayload(r *http.Request, release store.AppRelease) map[string]any {
 	return map[string]any{
-		"id":                release.ID,
-		"platform":          release.Platform,
-		"version":           release.Version,
-		"versionCode":       release.VersionCode,
-		"filename":          release.Filename,
-		"storagePath":       release.StoragePath,
-		"fileSize":          release.FileSize,
-		"sha256":            release.SHA256,
-		"changelog":         release.Changelog,
-		"status":            release.Status,
-		"isLatest":          release.IsLatest,
-		"createdByAdminId":  release.CreatedByAdminID,
-		"createdByUsername": release.CreatedByUsername,
-		"createdByRole":     release.CreatedByRole,
-		"publishedAt":       release.PublishedAt,
-		"createdAt":         release.CreatedAt,
-		"updatedAt":         release.UpdatedAt,
-		"downloadUrl":       h.releaseDownloadURL(r, release.StoragePath),
+		"id":                      release.ID,
+		"platform":                release.Platform,
+		"channel":                 release.Channel,
+		"arch":                    release.Arch,
+		"version":                 release.Version,
+		"versionCode":             release.VersionCode,
+		"minSupportedVersionCode": release.MinSupportedVersionCode,
+		"updateLevel":             release.UpdateLevel,
+		"title":                   release.Title,
+		"filename":                release.Filename,
+		"storagePath":             release.StoragePath,
+		"storageKey":              release.StorageKey,
+		"fileSize":                release.FileSize,
+		"sha256":                  release.SHA256,
+		"mimeType":                release.MimeType,
+		"changelog":               release.Changelog,
+		"status":                  release.Status,
+		"isLatest":                release.IsLatest,
+		"createdByAdminId":        release.CreatedByAdminID,
+		"createdByUsername":       release.CreatedByUsername,
+		"createdByRole":           release.CreatedByRole,
+		"publishedAt":             release.PublishedAt,
+		"createdAt":               release.CreatedAt,
+		"updatedAt":               release.UpdatedAt,
+		"downloadUrl":             h.releaseDownloadURL(r, release.StoragePath),
+		"publicDownloadUrl":       h.releaseDownloadURL(r, release.StoragePath),
 	}
 }
 
@@ -376,13 +434,14 @@ func (h *Handler) releaseDownloadURL(r *http.Request, storagePath string) string
 
 func defaultReleaseBroadcastMessage(release store.AppRelease, downloadURL string) string {
 	lines := []string{
-		fmt.Sprintf("HSgram %s 新版本已发布", strings.ToUpper(release.Platform)),
-		fmt.Sprintf("版本：%s (%d)", release.Version, release.VersionCode),
+		fmt.Sprintf("HSgram %s update released", strings.ToUpper(release.Platform)),
+		fmt.Sprintf("Version: %s (%d)", release.Version, release.VersionCode),
+		fmt.Sprintf("Channel: %s / Arch: %s / Level: %s", release.Channel, release.Arch, release.UpdateLevel),
 	}
 	if changelog := strings.TrimSpace(release.Changelog); changelog != "" {
-		lines = append(lines, "", "更新说明：", changelog)
+		lines = append(lines, "", "Changelog:", changelog)
 	}
-	lines = append(lines, "", "下载地址：", downloadURL)
+	lines = append(lines, "", "Download:", downloadURL)
 	return strings.Join(lines, "\n")
 }
 
