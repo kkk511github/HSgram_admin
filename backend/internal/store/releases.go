@@ -441,7 +441,8 @@ func (s *Store) getNewestAppReleaseExact(ctx context.Context, platform, channel,
 		FROM admin_app_releases r
 		LEFT JOIN admin_app_latest l ON l.release_id = r.id
 		WHERE r.platform = ? AND r.channel = ? AND r.arch = ?
-		ORDER BY CASE WHEN r.status = 'published' THEN 0 ELSE 1 END,
+		ORDER BY r.version_code DESC,
+		         CASE WHEN r.status = 'published' THEN 0 ELSE 1 END,
 		         COALESCE(r.published_at, r.created_at) DESC,
 		         r.created_at DESC,
 		         r.id DESC

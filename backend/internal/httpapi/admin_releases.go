@@ -113,6 +113,25 @@ func (h *Handler) handleReleaseUpload(w http.ResponseWriter, r *http.Request, ad
 		writeError(w, http.StatusInternalServerError, "保存安装包文件失败")
 		return
 	}
+	if platform == store.ReleasePlatformAndroid {
+		apkPath := filepath.Join(h.updates.ReleasesDir, filepath.FromSlash(storagePath))
+		metadata, err := readAPKManifestMetadata(apkPath)
+		if err != nil {
+			_ = os.Remove(apkPath)
+			writeError(w, http.StatusBadRequest, "读取 APK 版本信息失败，请确认文件是有效 APK")
+			return
+		}
+		if metadata.VersionCode != versionCode {
+			_ = os.Remove(apkPath)
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("versionCode 与 APK 内部版本不一致：表单填写 %d，APK 实际为 %d", versionCode, metadata.VersionCode))
+			return
+		}
+		if metadata.VersionName != "" && version != metadata.VersionName {
+			_ = os.Remove(apkPath)
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("版本号与 APK 内部版本不一致：表单填写 %s，APK 实际为 %s", version, metadata.VersionName))
+			return
+		}
+	}
 
 	release, err := h.store.CreateAppRelease(r.Context(), admin, store.CreateAppReleaseParams{
 		Platform:                platform,
