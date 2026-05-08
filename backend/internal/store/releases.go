@@ -376,6 +376,38 @@ func (s *Store) GetLatestAppReleaseFor(ctx context.Context, platform, channel, a
 	return nil, lastErr
 }
 
+func (s *Store) GetNewestAppReleaseFor(ctx context.Context, platform, channel, arch string) (*AppRelease, error) {
+	platform, err := NormalizeReleasePlatform(platform)
+	if err != nil {
+		return nil, err
+	}
+	channel, err = NormalizeReleaseChannel(channel)
+	if err != nil {
+		return nil, err
+	}
+	arch, err = NormalizeReleaseArch(platform, arch)
+	if err != nil {
+		return nil, err
+	}
+
+	keys := releaseLatestLookupKeys(channel, arch)
+	var lastErr error
+	for _, key := range keys {
+		release, err := s.getNewestAppReleaseExact(ctx, platform, key.channel, key.arch)
+		if err == nil {
+			return release, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+		lastErr = err
+	}
+	if lastErr == nil {
+		lastErr = sql.ErrNoRows
+	}
+	return nil, lastErr
+}
+
 func (s *Store) getLatestAppReleaseExact(ctx context.Context, platform, channel, arch string) (*AppRelease, error) {
 
 	row := s.db.QueryRowContext(ctx, `
@@ -389,6 +421,31 @@ func (s *Store) getLatestAppReleaseExact(ctx context.Context, platform, channel,
 		FROM admin_app_latest l
 		INNER JOIN admin_app_releases r ON r.id = l.release_id
 		WHERE l.platform = ? AND l.channel = ? AND l.arch = ?`, platform, channel, arch)
+
+	release, err := scanAppRelease(row)
+	if err != nil {
+		return nil, err
+	}
+	return &release, nil
+}
+
+func (s *Store) getNewestAppReleaseExact(ctx context.Context, platform, channel, arch string) (*AppRelease, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT r.id, r.platform, r.channel, r.arch, r.version, r.version_code,
+		       r.min_supported_version_code, r.update_level, r.title,
+		       r.filename, r.storage_path, r.storage_key, r.file_size, r.sha256,
+		       r.mime_type, r.download_url, r.public_download_url,
+		       r.changelog, r.status, IF(l.release_id IS NULL, 0, 1) AS is_latest,
+		       r.created_by_admin_id, r.created_by_username, r.created_by_role,
+		       r.published_at, r.created_at, r.updated_at
+		FROM admin_app_releases r
+		LEFT JOIN admin_app_latest l ON l.release_id = r.id
+		WHERE r.platform = ? AND r.channel = ? AND r.arch = ?
+		ORDER BY CASE WHEN r.status = 'published' THEN 0 ELSE 1 END,
+		         COALESCE(r.published_at, r.created_at) DESC,
+		         r.created_at DESC,
+		         r.id DESC
+		LIMIT 1`, platform, channel, arch)
 
 	release, err := scanAppRelease(row)
 	if err != nil {

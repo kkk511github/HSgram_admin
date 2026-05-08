@@ -112,6 +112,13 @@ func (h *Handler) loadUpdateManifest(r *http.Request, platform string) (updateMa
 		if !errors.Is(err, sql.ErrNoRows) {
 			return updateManifest{}, err
 		}
+		release, err = h.store.GetNewestAppReleaseFor(r.Context(), platform, channel, arch)
+		if err == nil {
+			return h.releaseManifest(r, *release), nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return updateManifest{}, err
+		}
 	}
 
 	manifest, err := h.loadUpdateManifestFile(r, platform, channel, arch)
