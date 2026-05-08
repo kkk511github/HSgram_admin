@@ -437,43 +437,43 @@
 
                   <div class="filter-grid">
                     <label>
-                      Channel
+                      渠道
                       <select id="releaseChannel">
-                        <option value="stable">stable</option>
-                        <option value="beta">beta</option>
-                        <option value="internal">internal</option>
+                        <option value="stable">稳定版</option>
+                        <option value="beta">测试版</option>
+                        <option value="internal">内部版</option>
                       </select>
                     </label>
                     <label>
-                      Arch
+                      架构
                       <select id="releaseArch">
-                        <option value="universal">universal</option>
-                        <option value="arm64-v8a">arm64-v8a</option>
-                        <option value="armeabi-v7a">armeabi-v7a</option>
-                        <option value="x86_64">x86_64</option>
-                        <option value="win-x64">win-x64</option>
-                        <option value="win-arm64">win-arm64</option>
+                        <option value="universal">通用</option>
+                        <option value="arm64-v8a">Android arm64-v8a</option>
+                        <option value="armeabi-v7a">Android armeabi-v7a</option>
+                        <option value="x86_64">Android x86_64</option>
+                        <option value="win-x64">Windows x64</option>
+                        <option value="win-arm64">Windows ARM64</option>
                       </select>
                     </label>
                   </div>
 
                   <div class="filter-grid">
                     <label>
-                      Update level
+                      更新级别
                       <select id="releaseUpdateLevel">
-                        <option value="optional">optional</option>
-                        <option value="recommended">recommended</option>
-                        <option value="required">required</option>
+                        <option value="optional">普通可选更新</option>
+                        <option value="recommended">推荐更新</option>
+                        <option value="required">强制更新</option>
                       </select>
                     </label>
                     <label>
-                      Min supported versionCode
+                      最低支持 versionCode
                       <input id="releaseMinSupportedVersionCode" type="number" min="0" step="1" value="0" />
                     </label>
                   </div>
 
                   <label>
-                    Title
+                    标题
                     <input id="releaseTitle" placeholder="HSgram 1.2.4" />
                   </label>
 

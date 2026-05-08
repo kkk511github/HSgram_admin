@@ -27,7 +27,7 @@ const (
 
 func (h *Handler) handleReleaseUpload(w http.ResponseWriter, r *http.Request, admin store.AdminUser) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		writeError(w, http.StatusMethodNotAllowed, "请求方法不允许")
 		return
 	}
 
@@ -40,7 +40,7 @@ func (h *Handler) handleReleaseUpload(w http.ResponseWriter, r *http.Request, ad
 			r.ContentLength,
 			err,
 		)
-		writeError(w, http.StatusBadRequest, "invalid multipart form")
+		writeError(w, http.StatusBadRequest, "安装包上传表单无效")
 		return
 	}
 
@@ -67,14 +67,14 @@ func (h *Handler) handleReleaseUpload(w http.ResponseWriter, r *http.Request, ad
 	version := strings.TrimSpace(r.FormValue("version"))
 	versionCode, err := strconv.Atoi(strings.TrimSpace(r.FormValue("versionCode")))
 	if err != nil || versionCode <= 0 {
-		writeError(w, http.StatusBadRequest, "versionCode must be a positive integer")
+		writeError(w, http.StatusBadRequest, "versionCode 必须是正整数")
 		return
 	}
 	minSupportedVersionCode := 0
 	if raw := strings.TrimSpace(r.FormValue("minSupportedVersionCode")); raw != "" {
 		minSupportedVersionCode, err = strconv.Atoi(raw)
 		if err != nil || minSupportedVersionCode < 0 {
-			writeError(w, http.StatusBadRequest, "minSupportedVersionCode must be zero or a positive integer")
+			writeError(w, http.StatusBadRequest, "minSupportedVersionCode 必须为 0 或正整数")
 			return
 		}
 	}
@@ -89,7 +89,7 @@ func (h *Handler) handleReleaseUpload(w http.ResponseWriter, r *http.Request, ad
 			r.Header.Get("Content-Type"),
 			err,
 		)
-		writeError(w, http.StatusBadRequest, "release file is required")
+		writeError(w, http.StatusBadRequest, "请上传安装包文件")
 		return
 	}
 	defer file.Close()
@@ -110,7 +110,7 @@ func (h *Handler) handleReleaseUpload(w http.ResponseWriter, r *http.Request, ad
 			storagePath,
 			err,
 		)
-		writeError(w, http.StatusInternalServerError, "save release file failed")
+		writeError(w, http.StatusInternalServerError, "保存安装包文件失败")
 		return
 	}
 
@@ -168,7 +168,7 @@ func (h *Handler) handleReleaseRoutes(w http.ResponseWriter, r *http.Request, ad
 
 	if path == "" {
 		if r.Method != http.MethodGet {
-			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			writeError(w, http.StatusMethodNotAllowed, "请求方法不允许")
 			return
 		}
 		h.handleReleaseList(w, r, admin)
@@ -178,13 +178,13 @@ func (h *Handler) handleReleaseRoutes(w http.ResponseWriter, r *http.Request, ad
 	parts := strings.Split(path, "/")
 	id, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid release id")
+		writeError(w, http.StatusBadRequest, "发布记录 ID 无效")
 		return
 	}
 
 	if len(parts) == 1 {
 		if r.Method != http.MethodGet {
-			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			writeError(w, http.StatusMethodNotAllowed, "请求方法不允许")
 			return
 		}
 		h.handleReleaseDetail(w, r, admin, id)
@@ -195,14 +195,14 @@ func (h *Handler) handleReleaseRoutes(w http.ResponseWriter, r *http.Request, ad
 	case "publish":
 		h.handleReleasePublish(w, r, admin, id)
 	default:
-		writeError(w, http.StatusNotFound, "route not found")
+		writeError(w, http.StatusNotFound, "发布接口不存在")
 	}
 }
 
 func (h *Handler) handleReleaseList(w http.ResponseWriter, r *http.Request, admin store.AdminUser) {
 	items, err := h.store.ListAppReleases(r.Context(), 100)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "load releases failed")
+		writeError(w, http.StatusInternalServerError, "加载发布记录失败")
 		return
 	}
 
@@ -221,10 +221,10 @@ func (h *Handler) handleReleaseDetail(w http.ResponseWriter, r *http.Request, ad
 	release, err := h.store.GetAppRelease(r.Context(), releaseID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "release not found")
+			writeError(w, http.StatusNotFound, "发布记录不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "load release failed")
+		writeError(w, http.StatusInternalServerError, "加载发布详情失败")
 		return
 	}
 
@@ -236,7 +236,7 @@ func (h *Handler) handleReleaseDetail(w http.ResponseWriter, r *http.Request, ad
 
 func (h *Handler) handleReleasePublish(w http.ResponseWriter, r *http.Request, admin store.AdminUser, releaseID int64) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		writeError(w, http.StatusMethodNotAllowed, "请求方法不允许")
 		return
 	}
 
@@ -245,26 +245,26 @@ func (h *Handler) handleReleasePublish(w http.ResponseWriter, r *http.Request, a
 		MessageText string `json:"messageText"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
-		writeError(w, http.StatusBadRequest, "invalid json body")
+		writeError(w, http.StatusBadRequest, "发布请求内容无效")
 		return
 	}
 	if req.NotifyUsers && h.broadcasts == nil {
-		writeError(w, http.StatusServiceUnavailable, "broadcast feature is disabled")
+		writeError(w, http.StatusServiceUnavailable, "系统广播功能未启用")
 		return
 	}
 
 	release, err := h.store.PublishAppRelease(r.Context(), releaseID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "release not found")
+			writeError(w, http.StatusNotFound, "发布记录不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "publish release failed")
+		writeError(w, http.StatusInternalServerError, "发布安装包失败")
 		return
 	}
 	if err := h.writeLatestUpdateManifest(r, *release); err != nil {
 		log.Printf("admin-api: write latest release manifest failed: %v", err)
-		writeError(w, http.StatusInternalServerError, "publish release manifest failed")
+		writeError(w, http.StatusInternalServerError, "发布更新清单失败")
 		return
 	}
 
@@ -322,7 +322,7 @@ func (h *Handler) handleReleasePublish(w http.ResponseWriter, r *http.Request, a
 func (h *Handler) prepareReleasePath(platform, channel, arch, version string, header *multipart.FileHeader) (string, string, string, error) {
 	version = sanitizeReleaseToken(version)
 	if version == "" {
-		return "", "", "", fmt.Errorf("version is required")
+		return "", "", "", fmt.Errorf("请填写版本号")
 	}
 	channel = sanitizeReleaseToken(channel)
 	arch = sanitizeReleaseToken(arch)
@@ -338,12 +338,12 @@ func (h *Handler) prepareReleasePath(platform, channel, arch, version string, he
 	switch platform {
 	case store.ReleasePlatformAndroid:
 		if ext != ".apk" {
-			return "", "", "", fmt.Errorf("android release must be an .apk file")
+			return "", "", "", fmt.Errorf("Android 安装包必须是 .apk 文件")
 		}
 		mimeType = "application/vnd.android.package-archive"
 	case store.ReleasePlatformWindows:
 		if ext != ".exe" {
-			return "", "", "", fmt.Errorf("windows release must be an .exe file")
+			return "", "", "", fmt.Errorf("Windows 安装包必须是 .exe 文件")
 		}
 		mimeType = "application/vnd.microsoft.portable-executable"
 	}
@@ -351,7 +351,7 @@ func (h *Handler) prepareReleasePath(platform, channel, arch, version string, he
 	baseName := fmt.Sprintf("HSgram-%s-%s-%s-%s%s", platform, channel, arch, version, ext)
 	baseName = sanitizeFilename(baseName)
 	if baseName == "" {
-		return "", "", "", fmt.Errorf("invalid release filename")
+		return "", "", "", fmt.Errorf("安装包文件名无效")
 	}
 
 	storagePath := filepath.ToSlash(filepath.Join(platform, channel, arch, baseName))
@@ -434,15 +434,65 @@ func (h *Handler) releaseDownloadURL(r *http.Request, storagePath string) string
 
 func defaultReleaseBroadcastMessage(release store.AppRelease, downloadURL string) string {
 	lines := []string{
-		fmt.Sprintf("HSgram %s update released", strings.ToUpper(release.Platform)),
-		fmt.Sprintf("Version: %s (%d)", release.Version, release.VersionCode),
-		fmt.Sprintf("Channel: %s / Arch: %s / Level: %s", release.Channel, release.Arch, release.UpdateLevel),
+		fmt.Sprintf("HSgram %s 更新已发布", releasePlatformText(release.Platform)),
+		fmt.Sprintf("版本: %s (%d)", release.Version, release.VersionCode),
+		fmt.Sprintf("渠道: %s / 架构: %s / 更新级别: %s", releaseChannelText(release.Channel), releaseArchText(release.Arch), releaseUpdateLevelText(release.UpdateLevel)),
 	}
 	if changelog := strings.TrimSpace(release.Changelog); changelog != "" {
-		lines = append(lines, "", "Changelog:", changelog)
+		lines = append(lines, "", "更新说明:", changelog)
 	}
-	lines = append(lines, "", "Download:", downloadURL)
+	lines = append(lines, "", "下载链接:", downloadURL)
 	return strings.Join(lines, "\n")
+}
+
+func releasePlatformText(platform string) string {
+	switch platform {
+	case store.ReleasePlatformAndroid:
+		return "Android"
+	case store.ReleasePlatformWindows:
+		return "Windows"
+	default:
+		return strings.ToUpper(platform)
+	}
+}
+
+func releaseChannelText(channel string) string {
+	switch channel {
+	case store.ReleaseChannelStable:
+		return "稳定版"
+	case store.ReleaseChannelBeta:
+		return "测试版"
+	case store.ReleaseChannelInternal:
+		return "内部版"
+	default:
+		return channel
+	}
+}
+
+func releaseArchText(arch string) string {
+	switch arch {
+	case store.ReleaseArchUniversal:
+		return "通用"
+	case store.ReleaseArchWindowsX64:
+		return "Windows x64"
+	case store.ReleaseArchWindowsArm64:
+		return "Windows ARM64"
+	default:
+		return arch
+	}
+}
+
+func releaseUpdateLevelText(level string) string {
+	switch level {
+	case store.ReleaseUpdateRequired:
+		return "强制更新"
+	case store.ReleaseUpdateRecommended:
+		return "推荐更新"
+	case store.ReleaseUpdateOptional:
+		return "普通可选更新"
+	default:
+		return level
+	}
 }
 
 func sanitizeReleaseToken(input string) string {

@@ -90,7 +90,7 @@ func NormalizeReleasePlatform(platform string) (string, error) {
 	case ReleasePlatformWindows, "pc", "desktop", "win":
 		return ReleasePlatformWindows, nil
 	default:
-		return "", fmt.Errorf("unsupported platform")
+		return "", fmt.Errorf("不支持的平台")
 	}
 }
 
@@ -103,7 +103,7 @@ func NormalizeReleaseChannel(channel string) (string, error) {
 	case ReleaseChannelInternal:
 		return ReleaseChannelInternal, nil
 	default:
-		return "", fmt.Errorf("unsupported channel")
+		return "", fmt.Errorf("不支持的发布渠道")
 	}
 }
 
@@ -116,7 +116,7 @@ func NormalizeReleaseUpdateLevel(level string) (string, error) {
 	case ReleaseUpdateRequired, "force", "forced":
 		return ReleaseUpdateRequired, nil
 	default:
-		return "", fmt.Errorf("unsupported update level")
+		return "", fmt.Errorf("不支持的更新级别")
 	}
 }
 
@@ -147,7 +147,7 @@ func NormalizeReleaseArch(platform, arch string) (string, error) {
 			return ReleaseArchWindowsArm64, nil
 		}
 	}
-	return "", fmt.Errorf("unsupported arch")
+	return "", fmt.Errorf("不支持的架构")
 }
 
 func (s *Store) EnsureReleaseSchema(ctx context.Context) error {
@@ -219,22 +219,22 @@ func (s *Store) CreateAppRelease(ctx context.Context, admin AdminUser, params Cr
 		return nil, err
 	}
 	if strings.TrimSpace(params.Version) == "" {
-		return nil, fmt.Errorf("version is required")
+		return nil, fmt.Errorf("请填写版本号")
 	}
 	if params.VersionCode <= 0 {
-		return nil, fmt.Errorf("version code is required")
+		return nil, fmt.Errorf("请填写版本编码")
 	}
 	if params.MinSupportedVersionCode < 0 {
-		return nil, fmt.Errorf("min supported version code must be zero or positive")
+		return nil, fmt.Errorf("最低支持版本编码必须为 0 或正整数")
 	}
 	if strings.TrimSpace(params.Filename) == "" || strings.TrimSpace(params.StoragePath) == "" {
-		return nil, fmt.Errorf("release file is required")
+		return nil, fmt.Errorf("请上传安装包文件")
 	}
 	if params.FileSize <= 0 {
-		return nil, fmt.Errorf("release file is empty")
+		return nil, fmt.Errorf("安装包文件为空")
 	}
 	if strings.TrimSpace(params.SHA256) == "" {
-		return nil, fmt.Errorf("sha256 is required")
+		return nil, fmt.Errorf("缺少 sha256")
 	}
 	storageKey := strings.TrimSpace(params.StorageKey)
 	if storageKey == "" {

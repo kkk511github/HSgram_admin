@@ -469,9 +469,9 @@ function renderReleases() {
       item.style.borderColor = "#2f6fed";
     }
     item.innerHTML = `
-      <div class="list-item-title">#${release.id} ${escapeHTML(release.platform)} ${escapeHTML(release.version)}</div>
-      <div>versionCode: ${release.versionCode} | ${escapeHTML(release.channel || "stable")} / ${escapeHTML(release.arch || "universal")} | ${escapeHTML(release.updateLevel || "optional")}</div>
-      <div>Status: ${escapeHTML(release.status)}${release.isLatest ? " | latest" : ""}</div>
+      <div class="list-item-title">#${release.id} ${escapeHTML(formatReleasePlatform(release.platform))} ${escapeHTML(release.version)}</div>
+      <div>版本编码: ${release.versionCode} | ${escapeHTML(formatReleaseChannel(release.channel))} / ${escapeHTML(formatReleaseArch(release.arch))} | ${escapeHTML(formatReleaseUpdateLevel(release.updateLevel))}</div>
+      <div>状态: ${escapeHTML(formatReleaseStatus(release.status))}${release.isLatest ? " | 当前最新" : ""}</div>
       <div>文件: ${escapeHTML(release.filename)} | 大小: ${formatFileSize(release.fileSize)}</div>
     `;
     item.addEventListener("click", () => loadReleaseDetail(release.id));
@@ -502,23 +502,23 @@ function renderReleaseDetail(release) {
   const item = document.createElement("div");
   item.className = "list-item";
   item.innerHTML = `
-    <div class="list-item-title">${escapeHTML(release.platform)} ${escapeHTML(release.version)}${release.isLatest ? "（当前最新）" : ""}</div>
+    <div class="list-item-title">${escapeHTML(formatReleasePlatform(release.platform))} ${escapeHTML(release.version)}${release.isLatest ? "（当前最新）" : ""}</div>
     <div>版本编码: ${release.versionCode}</div>
-    <div>Min supported versionCode: ${Number(release.minSupportedVersionCode || 0)}</div>
-    <div>Channel / Arch: ${escapeHTML(release.channel || "stable")} / ${escapeHTML(release.arch || "universal")}</div>
-    <div>Update level: ${escapeHTML(release.updateLevel || "optional")}</div>
-    <div>Title: ${escapeHTML(release.title || "-")}</div>
-    <div>状态: ${escapeHTML(release.status)}</div>
+    <div>最低支持 versionCode: ${Number(release.minSupportedVersionCode || 0)}</div>
+    <div>渠道 / 架构: ${escapeHTML(formatReleaseChannel(release.channel))} / ${escapeHTML(formatReleaseArch(release.arch))}</div>
+    <div>更新级别: ${escapeHTML(formatReleaseUpdateLevel(release.updateLevel))}</div>
+    <div>标题: ${escapeHTML(release.title || "-")}</div>
+    <div>状态: ${escapeHTML(formatReleaseStatus(release.status))}</div>
     <div>文件: ${escapeHTML(release.filename)}</div>
     <div>大小: ${formatFileSize(release.fileSize)}</div>
     <div>SHA256: ${escapeHTML(release.sha256 || "-")}</div>
     <div>MIME: ${escapeHTML(release.mimeType || "-")}</div>
-    <div>Storage key: ${escapeHTML(release.storageKey || release.storagePath || "-")}</div>
+    <div>存储路径: ${escapeHTML(release.storageKey || release.storagePath || "-")}</div>
     <div>上传者: ${escapeHTML(release.createdByUsername || "-")} (${escapeHTML(release.createdByRole || "-")})</div>
     <div>上传时间: ${formatDateTime(release.createdAt)}</div>
     <div>发布时间: ${formatDateTime(release.publishedAt)}</div>
     <div>下载地址: <a class="link-text" href="${escapeHTML(release.downloadUrl)}" target="_blank" rel="noopener noreferrer">打开下载链接</a></div>
-    <div>Public link: <a class="link-text" href="${escapeHTML(release.publicDownloadUrl || release.downloadUrl)}" target="_blank" rel="noopener noreferrer">${escapeHTML(release.publicDownloadUrl || release.downloadUrl || "-")}</a></div>
+    <div>公开分发链接: <a class="link-text" href="${escapeHTML(release.publicDownloadUrl || release.downloadUrl)}" target="_blank" rel="noopener noreferrer">${escapeHTML(release.publicDownloadUrl || release.downloadUrl || "-")}</a></div>
     <div>更新说明: ${escapeHTML(release.changelog || "-")}</div>
   `;
   elements.releaseDetailList.appendChild(item);
@@ -1510,6 +1510,58 @@ function formatFileSize(size) {
     return `${(value / (1024 * 1024)).toFixed(1)} MB`;
   }
   return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function formatReleasePlatform(platform) {
+  const value = platform || "-";
+  const labels = {
+    android: "Android",
+    windows: "Windows",
+    pc: "Windows",
+  };
+  return labels[value] || value;
+}
+
+function formatReleaseChannel(channel) {
+  const value = channel || "stable";
+  const labels = {
+    stable: "稳定版",
+    beta: "测试版",
+    internal: "内部版",
+  };
+  return labels[value] || value;
+}
+
+function formatReleaseArch(arch) {
+  const value = arch || "universal";
+  const labels = {
+    universal: "通用",
+    "arm64-v8a": "Android arm64-v8a",
+    "armeabi-v7a": "Android armeabi-v7a",
+    x86_64: "Android x86_64",
+    "win-x64": "Windows x64",
+    "win-arm64": "Windows ARM64",
+  };
+  return labels[value] || value;
+}
+
+function formatReleaseUpdateLevel(level) {
+  const value = level || "optional";
+  const labels = {
+    optional: "普通可选更新",
+    recommended: "推荐更新",
+    required: "强制更新",
+  };
+  return labels[value] || value;
+}
+
+function formatReleaseStatus(status) {
+  const value = status || "-";
+  const labels = {
+    draft: "未发布",
+    published: "已发布",
+  };
+  return labels[value] || value;
 }
 
 function toOptionalBool(value) {
