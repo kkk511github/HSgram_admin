@@ -50,6 +50,7 @@ services:
       - ./data/caddy/config:/config
     networks:
       - admin_net
+      - hsgram_server_teamgram_net
 
 networks:
   admin_net:
