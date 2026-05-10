@@ -16,6 +16,11 @@
 		redir tg://join?invite={re.invite.1}
 	}
 
+	@autoMessages path_regexp autoMessages ^/groups/[0-9]+/auto-messages(/.*)?$
+	handle @autoMessages {
+		reverse_proxy hsgram_server-teamgram-1:8802
+	}
+
 	reverse_proxy admin-api:8088 {
 		transport http {
 			read_timeout 30m
