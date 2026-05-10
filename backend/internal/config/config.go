@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -11,6 +12,7 @@ type Config struct {
 	ListenAddr         string
 	DatabaseDSN        string
 	EnableBroadcasts   bool
+	EnableAutoMessages bool
 	MsgRPCAddr         string
 	AuthsessionRPCAddr string
 	SyncRPCAddr        string
@@ -28,6 +30,16 @@ type Config struct {
 	HTTPWriteTimeout   time.Duration
 	BootstrapUsername  string
 	BootstrapPassword  string
+	AutoMessage        AutoMessageConfig
+}
+
+type AutoMessageConfig struct {
+	SenderUserID int64
+	TickInterval time.Duration
+	BatchSize    int
+	LockTTL      time.Duration
+	ShardTotal   int
+	ShardIndex   int
 }
 
 type StickerMinIOConfig struct {
@@ -53,11 +65,20 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("parse ADMIN_HTTP_WRITE_TIMEOUT: %w", err)
 	}
+	autoMessageTick, err := time.ParseDuration(getEnv("ADMIN_AUTO_MESSAGE_TICK_INTERVAL", "1m"))
+	if err != nil {
+		return Config{}, fmt.Errorf("parse ADMIN_AUTO_MESSAGE_TICK_INTERVAL: %w", err)
+	}
+	autoMessageLockTTL, err := time.ParseDuration(getEnv("ADMIN_AUTO_MESSAGE_LOCK_TTL", "120s"))
+	if err != nil {
+		return Config{}, fmt.Errorf("parse ADMIN_AUTO_MESSAGE_LOCK_TTL: %w", err)
+	}
 
 	cfg := Config{
 		ListenAddr:         getEnv("ADMIN_LISTEN_ADDR", ":8088"),
 		DatabaseDSN:        os.Getenv("ADMIN_DATABASE_DSN"),
 		EnableBroadcasts:   getEnvBool("ADMIN_ENABLE_BROADCASTS", true),
+		EnableAutoMessages: getEnvBool("ADMIN_ENABLE_AUTO_MESSAGES", true),
 		MsgRPCAddr:         strings.TrimSpace(os.Getenv("ADMIN_MSG_RPC_ADDR")),
 		AuthsessionRPCAddr: strings.TrimSpace(os.Getenv("ADMIN_AUTHSESSION_RPC_ADDR")),
 		SyncRPCAddr:        strings.TrimSpace(getEnv("ADMIN_SYNC_RPC_ADDR", "hsgram_server-teamgram-1:20420")),
@@ -81,6 +102,14 @@ func Load() (Config, error) {
 		HTTPWriteTimeout:  httpWriteTimeout,
 		BootstrapUsername: getEnv("ADMIN_BOOTSTRAP_USERNAME", "admin"),
 		BootstrapPassword: os.Getenv("ADMIN_BOOTSTRAP_PASSWORD"),
+		AutoMessage: AutoMessageConfig{
+			SenderUserID: getEnvInt64("ADMIN_AUTO_MESSAGE_SENDER_USER_ID", 778000),
+			TickInterval: autoMessageTick,
+			BatchSize:    getEnvInt("ADMIN_AUTO_MESSAGE_BATCH_SIZE", 500),
+			LockTTL:      autoMessageLockTTL,
+			ShardTotal:   getEnvInt("ADMIN_AUTO_MESSAGE_SHARD_TOTAL", 1),
+			ShardIndex:   getEnvInt("ADMIN_AUTO_MESSAGE_SHARD_INDEX", 0),
+		},
 	}
 
 	if cfg.DatabaseDSN == "" {
@@ -117,4 +146,28 @@ func getEnvBool(key string, fallback bool) bool {
 	default:
 		return fallback
 	}
+}
+
+func getEnvInt(key string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func getEnvInt64(key string, fallback int64) int64 {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }

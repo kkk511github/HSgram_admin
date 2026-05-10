@@ -9,6 +9,7 @@ import (
 
 	"hsgram-admin/backend/internal/auth"
 	"hsgram-admin/backend/internal/authsessionrpc"
+	"hsgram-admin/backend/internal/automessage"
 	"hsgram-admin/backend/internal/broadcast"
 	"hsgram-admin/backend/internal/config"
 	"hsgram-admin/backend/internal/gatewayrpc"
@@ -36,6 +37,7 @@ type App struct {
 	statusClient      *statusrpc.Client
 	gatewayClient     *gatewayrpc.Client
 	broadcaster       *broadcast.Service
+	autoMessages      *automessage.Service
 	riskService       *risk.Service
 	inviteCodes       *invitecodes.Service
 	stickerImporter   *stickers.Service
@@ -65,6 +67,10 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		return nil, err
 	}
 	if err := userStore.EnsureReleaseSchema(ctx); err != nil {
+		_ = userStore.Close()
+		return nil, err
+	}
+	if err := userStore.EnsureAutoMessageSchema(ctx); err != nil {
 		_ = userStore.Close()
 		return nil, err
 	}
@@ -132,6 +138,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	var statusClient *statusrpc.Client
 	var gatewayClient *gatewayrpc.Client
 	var broadcaster *broadcast.Service
+	var autoMessages *automessage.Service
 	if cfg.EnableBroadcasts {
 		if err := userStore.EnsureBroadcastSchema(ctx); err != nil {
 			_ = userStore.Close()
@@ -146,6 +153,24 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 			broadcaster = broadcast.New(userStore, msgClient)
 		} else {
 			log.Printf("admin-api: ADMIN_ENABLE_BROADCASTS is true but ADMIN_MSG_RPC_ADDR is empty; broadcast API stays disabled until msg RPC is set")
+		}
+	}
+	if cfg.EnableAutoMessages {
+		if err := userStore.EnsureBroadcastSystemUser(ctx); err != nil {
+			_ = userStore.Close()
+			return nil, err
+		}
+		if msgClient != nil {
+			autoMessages = automessage.New(userStore, msgClient, kvStore, automessage.Options{
+				SenderUserID: cfg.AutoMessage.SenderUserID,
+				BatchSize:    cfg.AutoMessage.BatchSize,
+				LockTTL:      cfg.AutoMessage.LockTTL,
+				TickInterval: cfg.AutoMessage.TickInterval,
+				ShardTotal:   cfg.AutoMessage.ShardTotal,
+				ShardIndex:   cfg.AutoMessage.ShardIndex,
+			})
+		} else {
+			log.Printf("admin-api: ADMIN_ENABLE_AUTO_MESSAGES is true but ADMIN_MSG_RPC_ADDR is empty; auto message scheduler is disabled")
 		}
 	}
 
@@ -219,7 +244,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		log.Printf("admin-api: ADMIN_GATEWAY_RPC_ADDR is empty; online socket disconnect will be disabled")
 	}
 
-	handler := httpapi.New(tokenMgr, userStore, broadcaster, authsessionClient, syncClient, statusClient, gatewayClient, riskService, inviteService, msgClient, stickerImporter, httpapi.UpdateConfig{
+	handler := httpapi.NewWithAutoMessages(tokenMgr, userStore, broadcaster, authsessionClient, syncClient, statusClient, gatewayClient, riskService, inviteService, msgClient, autoMessages, stickerImporter, httpapi.UpdateConfig{
 		ReleasesDir:   cfg.ReleasesDir,
 		PublicBaseURL: cfg.PublicBaseURL,
 	})
@@ -234,6 +259,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		statusClient:      statusClient,
 		gatewayClient:     gatewayClient,
 		broadcaster:       broadcaster,
+		autoMessages:      autoMessages,
 		riskService:       riskService,
 		inviteCodes:       inviteService,
 		stickerImporter:   stickerImporter,
@@ -253,6 +279,9 @@ func (a *App) Run(ctx context.Context) error {
 	errCh := make(chan error, 1)
 	if a.broadcaster != nil {
 		go a.broadcaster.Run(ctx)
+	}
+	if a.autoMessages != nil {
+		go a.autoMessages.Run(ctx)
 	}
 
 	go func() {

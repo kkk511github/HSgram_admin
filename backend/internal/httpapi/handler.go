@@ -17,6 +17,7 @@ import (
 	"github.com/teamgram/teamgram-server/pkg/riskctrl"
 	"hsgram-admin/backend/internal/auth"
 	"hsgram-admin/backend/internal/authsessionrpc"
+	"hsgram-admin/backend/internal/automessage"
 	"hsgram-admin/backend/internal/broadcast"
 	"hsgram-admin/backend/internal/gatewayrpc"
 	"hsgram-admin/backend/internal/invitecodes"
@@ -40,6 +41,7 @@ type Handler struct {
 	risk         *risk.Service
 	invites      *invitecodes.Service
 	msg          messageService
+	autoMessages autoMessageService
 	stickers     stickerService
 	updates      UpdateConfig
 	web          http.Handler
@@ -49,6 +51,18 @@ type Handler struct {
 
 type messageService interface {
 	SendTextMessage(ctx context.Context, senderUserID, targetUserID int64, text string) error
+}
+
+type autoMessageService interface {
+	GetConfig(ctx context.Context, actorUserID, groupID int64) (*store.AutoMessageConfigDetail, error)
+	SaveConfig(ctx context.Context, actorUserID, groupID int64, params store.SaveAutoMessageConfigParams) (*store.AutoMessageConfigDetail, error)
+	Enable(ctx context.Context, actorUserID, groupID int64, intervalMinutes int) (*store.AutoMessageConfigDetail, error)
+	Disable(ctx context.Context, actorUserID, groupID int64) (*store.AutoMessageConfigDetail, error)
+	AddItem(ctx context.Context, actorUserID, groupID int64, input store.AutoMessageItemInput) (*store.AutoMessageConfigDetail, error)
+	UpdateItem(ctx context.Context, actorUserID, groupID, itemID int64, input store.AutoMessageItemInput) (*store.AutoMessageConfigDetail, error)
+	DeleteItem(ctx context.Context, actorUserID, groupID, itemID int64) (*store.AutoMessageConfigDetail, error)
+	SortItems(ctx context.Context, actorUserID, groupID int64, itemIDs []int64) (*store.AutoMessageConfigDetail, error)
+	Logs(ctx context.Context, actorUserID, groupID int64, page, pageSize int) (store.AutoMessageLogList, error)
 }
 
 type stickerService interface {
@@ -90,6 +104,7 @@ type apiResponse struct {
 type featureFlags struct {
 	Broadcasts         bool `json:"broadcasts"`
 	Support            bool `json:"support"`
+	AutoMessages       bool `json:"autoMessages"`
 	FullSessionRevoke  bool `json:"fullSessionRevoke"`
 	RealtimeDisconnect bool `json:"realtimeDisconnect"`
 }
@@ -101,6 +116,14 @@ type dependencyState struct {
 }
 
 func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Service, authsessions *authsessionrpc.Client, syncClient *syncrpc.Client, statusClient *statusrpc.Client, gatewayClient *gatewayrpc.Client, riskService *risk.Service, inviteService *invitecodes.Service, msgClient *messenger.Client, stickerSvc stickerService, updates UpdateConfig) http.Handler {
+	return newHandler(tokens, userStore, broadcasts, authsessions, syncClient, statusClient, gatewayClient, riskService, inviteService, msgClient, nil, stickerSvc, updates)
+}
+
+func NewWithAutoMessages(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Service, authsessions *authsessionrpc.Client, syncClient *syncrpc.Client, statusClient *statusrpc.Client, gatewayClient *gatewayrpc.Client, riskService *risk.Service, inviteService *invitecodes.Service, msgClient *messenger.Client, autoMessageSvc *automessage.Service, stickerSvc stickerService, updates UpdateConfig) http.Handler {
+	return newHandler(tokens, userStore, broadcasts, authsessions, syncClient, statusClient, gatewayClient, riskService, inviteService, msgClient, autoMessageSvc, stickerSvc, updates)
+}
+
+func newHandler(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Service, authsessions *authsessionrpc.Client, syncClient *syncrpc.Client, statusClient *statusrpc.Client, gatewayClient *gatewayrpc.Client, riskService *risk.Service, inviteService *invitecodes.Service, msgClient *messenger.Client, autoMessageSvc *automessage.Service, stickerSvc stickerService, updates UpdateConfig) http.Handler {
 	handler := &Handler{
 		tokens:   tokens,
 		store:    userStore,
@@ -128,6 +151,9 @@ func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Ser
 	}
 	if msgClient != nil {
 		handler.msg = msgClient
+	}
+	if autoMessageSvc != nil {
+		handler.autoMessages = autoMessageSvc
 	}
 	if stickerSvc != nil {
 		handler.stickers = stickerSvc
@@ -159,6 +185,7 @@ func New(tokens *auth.Manager, userStore *store.Store, broadcasts *broadcast.Ser
 	mux.Handle("/api/admin/stickers/import", handler.requireSuperAdmin(handler.handleStickerImport))
 	mux.Handle("/api/admin/stickers/sets", handler.requireSuperAdmin(handler.handleStickerSets))
 	mux.Handle("/api/admin/stickers/sets/", handler.requireSuperAdmin(handler.handleStickerSetRoutes))
+	mux.Handle("/groups/", handler.requireGroupActor(handler.handleGroupAutoMessageRoutes))
 	mux.HandleFunc("/api/", handler.handleAPINotFound)
 	mux.HandleFunc("/td/current", handler.handleTDesktopCurrent)
 	mux.Handle("/releases/", handler.releases)
@@ -697,6 +724,7 @@ func (h *Handler) features() featureFlags {
 	return featureFlags{
 		Broadcasts:         h.broadcasts != nil,
 		Support:            h.msg != nil,
+		AutoMessages:       h.autoMessages != nil,
 		FullSessionRevoke:  h.authsessions != nil,
 		RealtimeDisconnect: h.status != nil && h.sync != nil && h.gateway != nil,
 	}
@@ -749,7 +777,7 @@ func uniqueStrings(items []string) []string {
 
 func withJSONDefaults(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/") {
+		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/groups/") {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		}
 		next.ServeHTTP(w, r)
