@@ -22,6 +22,7 @@
 - 登录失败限流
 - Android / PC 公共 OTA manifest 与制品下载入口
 - 授权 Telegram sticker set 导入 API
+- 反垃圾误判反馈查询 API
 - Docker 化部署
 - Caddy 反向代理和 HTTPS 入口
 
@@ -47,6 +48,24 @@ go run ./cmd/admin-api
 - 留空保存表示关闭自动添加
 - 配置写入业务库的 `admin_runtime_settings` 表，服务端注册流程会直接读取该表
 - 新服务器首次部署还可以用服务端 `DefaultAdminContactUserIds` 或环境变量 `HSGRAM_DEFAULT_ADMIN_CONTACT_USER_IDS=10001,10002` 做兜底，后台保存后以数据库配置为准
+
+## 反垃圾误判反馈
+
+群管理员在客户端对反垃圾误判消息发起反馈后，服务端会写入业务库 `channel_anti_spam_false_positives`。后台现在提供 `super_admin` 只读查询 API：
+
+```bash
+curl -H "Authorization: Bearer $ADMIN_TOKEN" \
+  "https://admin.example.com/api/admin/anti-spam/false-positives?channel_id=12345&limit=50"
+```
+
+参数：
+
+- `channel_id` / `channelId`：可选，按群/频道过滤
+- `reporter_user_id` / `reporterUserId`：可选，按反馈管理员过滤
+- `limit`：可选，默认 `50`，最大 `200`
+- `offset`：可选，分页偏移
+
+部署前请先在业务库执行服务端迁移 `HSgram_server/teamgramd/deploy/sql/migrate-20260522-channel-antispam.sql`；已部署过反垃圾表的环境再执行 `migrate-20260522-channel-antispam-admin-index.sql` 补查询索引。
 
 ## 公网部署
 

@@ -173,6 +173,7 @@ func newHandler(tokens *auth.Manager, userStore *store.Store, broadcasts *broadc
 	mux.Handle("/api/admin/users/", handler.requireAuth(handler.handleUserRoutes))
 	mux.Handle("/api/admin/risk/settings", handler.requireSuperAdmin(handler.handleRiskSettings))
 	mux.Handle("/api/admin/risk/signup-ip-stats", handler.requireSuperAdmin(handler.handleRiskSignupIPStats))
+	mux.Handle("/api/admin/anti-spam/false-positives", handler.requireSuperAdmin(handler.handleAntiSpamFalsePositives))
 	mux.Handle("/api/admin/invite-codes", handler.requireSuperAdmin(handler.handleInviteCodes))
 	mux.Handle("/api/admin/invite-code-settings", handler.requireSuperAdmin(handler.handleInviteCodeSettings))
 	mux.Handle("/api/admin/invite-codes/", handler.requireSuperAdmin(handler.handleInviteCodeRoutes))
