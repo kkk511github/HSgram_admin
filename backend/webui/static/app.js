@@ -1,6 +1,7 @@
 const PANEL_META = {
   users: { title: "用户管理", subtitle: "搜索与处理用户账号、会话与审计" },
   risk: { title: "风控策略", subtitle: "配置踢下线后的登录限制，以及同 IP 注册上限" },
+  antiSpam: { title: "反垃圾反馈", subtitle: "查看群管理员提交的误判反馈记录" },
   invites: { title: "邀请码", subtitle: "生成邀请码并查看实时使用记录" },
   defaultAdmins: { title: "默认管理员", subtitle: "配置新账号注册后自动添加的管理员联系人" },
   support: { title: "客服消息", subtitle: "统一查看用户咨询并通过客服号直接回复" },
@@ -32,6 +33,11 @@ const state = {
   uploadState: "idle",
   riskSettings: { kickLoginBlockSeconds: 300, signupIpDailyLimit: 5 },
   signupIpStats: [],
+  antiSpamReports: [],
+  antiSpamChannelId: "",
+  antiSpamReporterUserId: "",
+  antiSpamLimit: 50,
+  antiSpamOffset: 0,
   inviteSettings: { enabled: false, updatedAt: 0 },
   inviteCodes: [],
   selectedInviteCode: null,
@@ -53,6 +59,7 @@ const elements = {
   contentSubtitle: document.getElementById("contentSubtitle"),
   panelUsers: document.getElementById("panelUsers"),
   panelRisk: document.getElementById("panelRisk"),
+  panelAntiSpam: document.getElementById("panelAntiSpam"),
   panelInvites: document.getElementById("panelInvites"),
   panelDefaultAdmins: document.getElementById("panelDefaultAdmins"),
   panelSupport: document.getElementById("panelSupport"),
@@ -85,6 +92,18 @@ const elements = {
   riskRefreshButton: document.getElementById("riskRefreshButton"),
   riskStatusText: document.getElementById("riskStatusText"),
   riskStatsList: document.getElementById("riskStatsList"),
+  antiSpamChannelInput: document.getElementById("antiSpamChannelInput"),
+  antiSpamReporterInput: document.getElementById("antiSpamReporterInput"),
+  antiSpamSearchButton: document.getElementById("antiSpamSearchButton"),
+  antiSpamClearButton: document.getElementById("antiSpamClearButton"),
+  antiSpamRefreshButton: document.getElementById("antiSpamRefreshButton"),
+  antiSpamReportCount: document.getElementById("antiSpamReportCount"),
+  antiSpamReportPage: document.getElementById("antiSpamReportPage"),
+  antiSpamReportStatus: document.getElementById("antiSpamReportStatus"),
+  antiSpamReportsBody: document.getElementById("antiSpamReportsBody"),
+  antiSpamPrevButton: document.getElementById("antiSpamPrevButton"),
+  antiSpamNextButton: document.getElementById("antiSpamNextButton"),
+  antiSpamPageText: document.getElementById("antiSpamPageText"),
   inviteCodeInput: document.getElementById("inviteCodeInput"),
   inviteMaxUsesInput: document.getElementById("inviteMaxUsesInput"),
   inviteNoteInput: document.getElementById("inviteNoteInput"),
@@ -184,6 +203,11 @@ elements.unbanButton.addEventListener("click", () => mutateSelectedUser("unban")
 elements.kickSessionsButton.addEventListener("click", () => mutateSelectedUser("kick-sessions"));
 elements.riskSaveButton.addEventListener("click", saveRiskSettings);
 elements.riskRefreshButton.addEventListener("click", refreshRiskPanel);
+elements.antiSpamSearchButton.addEventListener("click", runAntiSpamReportSearch);
+elements.antiSpamClearButton.addEventListener("click", clearAntiSpamReportFilters);
+elements.antiSpamRefreshButton.addEventListener("click", () => loadAntiSpamReports().catch((error) => toast(error.message || "加载误判反馈失败")));
+elements.antiSpamPrevButton.addEventListener("click", () => changeAntiSpamReportPage(-1));
+elements.antiSpamNextButton.addEventListener("click", () => changeAntiSpamReportPage(1));
 elements.inviteSettingsSaveButton.addEventListener("click", saveInviteSettings);
 elements.inviteCreateButton.addEventListener("click", createInviteCode);
 elements.inviteRefreshButton.addEventListener("click", () => refreshInvitePanel().catch((error) => toast(error.message || "加载邀请码失败")));
@@ -231,6 +255,16 @@ elements.stickerRefreshButton.addEventListener("click", () => loadStickerSets().
 elements.searchInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     runSearch();
+  }
+});
+elements.antiSpamChannelInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    runAntiSpamReportSearch();
+  }
+});
+elements.antiSpamReporterInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    runAntiSpamReportSearch();
   }
 });
 
@@ -319,6 +353,10 @@ function logout() {
   state.uploadState = "idle";
   state.riskSettings = { kickLoginBlockSeconds: 300, signupIpDailyLimit: 5 };
   state.signupIpStats = [];
+  state.antiSpamReports = [];
+  state.antiSpamChannelId = "";
+  state.antiSpamReporterUserId = "";
+  state.antiSpamOffset = 0;
   state.inviteSettings = { enabled: false, updatedAt: 0 };
   state.inviteCodes = [];
   state.selectedInviteCode = null;
@@ -340,7 +378,7 @@ function renderLoggedOut() {
 }
 
 function setActivePanel(panel) {
-  const allowed = ["users", "risk", "invites", "defaultAdmins", "support", "releases", "stickers", "broadcast"];
+  const allowed = ["users", "risk", "antiSpam", "invites", "defaultAdmins", "support", "releases", "stickers", "broadcast"];
   let id = allowed.includes(panel) ? panel : "users";
   if (id === "support" && !state.features.support) {
     toast("当前部署未配置客服消息 RPC，客服面板不可用");
@@ -354,6 +392,7 @@ function setActivePanel(panel) {
 
   elements.panelUsers.classList.toggle("hidden", id !== "users");
   elements.panelRisk.classList.toggle("hidden", id !== "risk");
+  elements.panelAntiSpam.classList.toggle("hidden", id !== "antiSpam");
   elements.panelInvites.classList.toggle("hidden", id !== "invites");
   elements.panelDefaultAdmins.classList.toggle("hidden", id !== "defaultAdmins");
   elements.panelSupport.classList.toggle("hidden", id !== "support");
@@ -370,6 +409,11 @@ function setActivePanel(panel) {
     return;
   }
   stopSupportPolling();
+  if (id === "antiSpam") {
+    if (!state.antiSpamReports.length) {
+      loadAntiSpamReports().catch((error) => toast(error.message || "加载误判反馈失败"));
+    }
+  }
   if (id === "stickers") {
     loadStickerSets().catch((error) => toast(error.message || "加载贴纸包失败"));
   }
@@ -1359,6 +1403,127 @@ async function refreshRiskPanel() {
     elements.riskStatusText.textContent = error.message || "风控数据加载失败";
     throw error;
   }
+}
+
+async function loadAntiSpamReports() {
+  const params = new URLSearchParams({
+    limit: String(state.antiSpamLimit),
+    offset: String(state.antiSpamOffset),
+  });
+  if (state.antiSpamChannelId) {
+    params.set("channel_id", state.antiSpamChannelId);
+  }
+  if (state.antiSpamReporterUserId) {
+    params.set("reporter_user_id", state.antiSpamReporterUserId);
+  }
+
+  elements.antiSpamReportStatus.textContent = "加载中";
+  try {
+    const response = await api(`/api/admin/anti-spam/false-positives?${params.toString()}`);
+    const payload = response.data || {};
+    state.antiSpamReports = Array.isArray(payload.items) ? payload.items : [];
+    state.antiSpamLimit = Number(payload.limit || state.antiSpamLimit || 50);
+    state.antiSpamOffset = Number(payload.offset || state.antiSpamOffset || 0);
+    renderAntiSpamReports();
+    elements.antiSpamReportStatus.textContent = "已刷新";
+  } catch (error) {
+    state.antiSpamReports = [];
+    renderAntiSpamReports(error);
+    elements.antiSpamReportStatus.textContent = "加载失败";
+    throw error;
+  }
+}
+
+function runAntiSpamReportSearch() {
+  const channelId = parsePositiveIntegerFilter(elements.antiSpamChannelInput.value, "群 / 频道 ID");
+  if (channelId === null) {
+    return;
+  }
+  const reporterUserId = parsePositiveIntegerFilter(elements.antiSpamReporterInput.value, "反馈管理员用户 ID");
+  if (reporterUserId === null) {
+    return;
+  }
+
+  state.antiSpamChannelId = channelId;
+  state.antiSpamReporterUserId = reporterUserId;
+  state.antiSpamOffset = 0;
+  loadAntiSpamReports().catch((error) => toast(error.message || "查询误判反馈失败"));
+}
+
+function clearAntiSpamReportFilters() {
+  elements.antiSpamChannelInput.value = "";
+  elements.antiSpamReporterInput.value = "";
+  state.antiSpamChannelId = "";
+  state.antiSpamReporterUserId = "";
+  state.antiSpamOffset = 0;
+  loadAntiSpamReports().catch((error) => toast(error.message || "加载误判反馈失败"));
+}
+
+function changeAntiSpamReportPage(direction) {
+  const offset = direction < 0 ? -state.antiSpamLimit : state.antiSpamLimit;
+  const nextOffset = state.antiSpamOffset + offset;
+  if (nextOffset < 0) {
+    return;
+  }
+  if (direction > 0 && state.antiSpamReports.length < state.antiSpamLimit) {
+    return;
+  }
+  state.antiSpamOffset = nextOffset;
+  loadAntiSpamReports().catch((error) => toast(error.message || "加载误判反馈失败"));
+}
+
+function renderAntiSpamReports(error) {
+  const limit = state.antiSpamLimit || 50;
+  const page = Math.floor((state.antiSpamOffset || 0) / limit) + 1;
+  elements.antiSpamReportCount.textContent = String(state.antiSpamReports.length);
+  elements.antiSpamReportPage.textContent = String(page);
+  elements.antiSpamPageText.textContent = `第 ${page} 页`;
+  elements.antiSpamPrevButton.disabled = state.antiSpamOffset <= 0;
+  elements.antiSpamNextButton.disabled = state.antiSpamReports.length < limit;
+  elements.antiSpamReportsBody.innerHTML = "";
+
+  if (error) {
+    const row = document.createElement("tr");
+    row.innerHTML = `<td colspan="5" class="muted">加载失败：${escapeHTML(error.message || "未知错误")}</td>`;
+    elements.antiSpamReportsBody.appendChild(row);
+    return;
+  }
+
+  if (!state.antiSpamReports.length) {
+    const row = document.createElement("tr");
+    row.innerHTML = `<td colspan="5" class="muted">暂无误判反馈记录</td>`;
+    elements.antiSpamReportsBody.appendChild(row);
+    return;
+  }
+
+  state.antiSpamReports.forEach((item) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${escapeHTML(item.channelId || "-")}</td>
+      <td>${escapeHTML(item.reporterUserId || "-")}</td>
+      <td>${escapeHTML(item.msgId || "-")}</td>
+      <td>${formatDateTime(item.createdAt)}</td>
+      <td>${formatDateTime(item.updatedAt)}</td>
+    `;
+    elements.antiSpamReportsBody.appendChild(row);
+  });
+}
+
+function parsePositiveIntegerFilter(value, label) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+  if (!/^\d+$/.test(raw)) {
+    toast(`${label} 只能填写正整数`);
+    return null;
+  }
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    toast(`${label} 超出有效范围`);
+    return null;
+  }
+  return raw;
 }
 
 function renderRiskPanel() {

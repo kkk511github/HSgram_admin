@@ -22,7 +22,7 @@
 - 登录失败限流
 - Android / PC 公共 OTA manifest 与制品下载入口
 - 授权 Telegram sticker set 导入 API
-- 反垃圾误判反馈查询 API
+- 反垃圾误判反馈可视化查询页与只读 API
 - Docker 化部署
 - Caddy 反向代理和 HTTPS 入口
 
@@ -51,7 +51,11 @@ go run ./cmd/admin-api
 
 ## 反垃圾误判反馈
 
-群管理员在客户端对反垃圾误判消息发起反馈后，服务端会写入业务库 `channel_anti_spam_false_positives`。后台现在提供 `super_admin` 只读查询 API：
+群管理员在客户端对反垃圾误判消息发起反馈后，服务端会写入业务库 `channel_anti_spam_false_positives`。后台现在提供 `super_admin` 可视化查询页和只读 API：
+
+- Web 入口：登录后台后打开左侧“反垃圾 / 误判反馈”
+- 支持按群/频道 ID、反馈管理员用户 ID 筛选
+- 支持刷新与分页，只展示记录，不提供删除或改写能力
 
 ```bash
 curl -H "Authorization: Bearer $ADMIN_TOKEN" \

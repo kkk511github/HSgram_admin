@@ -438,6 +438,7 @@ h3 {
 .release-card,
 .broadcast-card,
 .sticker-card,
+.antispam-card,
 .support-workspace {
   padding: 20px;
 }
@@ -475,6 +476,43 @@ h3 {
 .sticker-grid {
   grid-template-columns: minmax(320px, 1fr) minmax(300px, 0.9fr);
   align-items: start;
+}
+
+.antispam-card {
+  display: grid;
+  gap: 16px;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metric-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.metric-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.metric-card strong {
+  overflow-wrap: anywhere;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.antispam-table th,
+.antispam-table td {
+  white-space: nowrap;
 }
 
 .dashboard-grid {
@@ -1049,7 +1087,8 @@ tbody tr:hover {
   }
 
   .search-row,
-  .filter-grid {
+  .filter-grid,
+  .metric-grid {
     grid-template-columns: 1fr;
   }
 

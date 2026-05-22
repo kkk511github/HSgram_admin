@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HSgram Admin</title>
-    <link rel="stylesheet" href="/styles.css?v=20260421-4" />
+    <link rel="stylesheet" href="/styles.css?v=20260522-1" />
   </head>
   <body>
     <div class="layout">
@@ -26,6 +26,11 @@
               <span class="nav-kicker">策略</span>
               <span class="nav-label">风控策略</span>
               <span class="nav-desc">登录限制、注册阈值、日常观察</span>
+            </button>
+            <button type="button" class="nav-item" data-panel="antiSpam" id="navAntiSpam">
+              <span class="nav-kicker">反垃圾</span>
+              <span class="nav-label">误判反馈</span>
+              <span class="nav-desc">查看群管理员提交的误判反馈</span>
             </button>
             <button type="button" class="nav-item" data-panel="invites" id="navInvites">
               <span class="nav-kicker">注册</span>
@@ -241,6 +246,70 @@
                   <div class="section-title minor">今日注册 IP 统计</div>
                   <div id="riskStatsList" class="list"></div>
                 </div>
+              </div>
+            </section>
+          </div>
+
+          <div id="panelAntiSpam" class="panel hidden" data-panel="antiSpam">
+            <section class="card antispam-card">
+              <div class="panel-heading">
+                <div>
+                  <div class="section-title">反垃圾误判反馈</div>
+                  <div class="muted">只读查看群管理员从 Recent Actions / Event Log 提交的反垃圾误判记录。</div>
+                </div>
+                <button id="antiSpamRefreshButton" class="secondary">刷新</button>
+              </div>
+
+              <div class="filter-grid antispam-filters">
+                <label>
+                  群 / 频道 ID
+                  <input id="antiSpamChannelInput" inputmode="numeric" placeholder="例如 123456789" />
+                </label>
+                <label>
+                  反馈管理员用户 ID
+                  <input id="antiSpamReporterInput" inputmode="numeric" placeholder="例如 10001" />
+                </label>
+              </div>
+
+              <div class="action-row compact">
+                <button id="antiSpamSearchButton">查询反馈</button>
+                <button id="antiSpamClearButton" class="secondary">清空筛选</button>
+              </div>
+
+              <div class="metric-grid antispam-metrics">
+                <div class="metric-card">
+                  <span class="metric-label">当前页记录</span>
+                  <strong id="antiSpamReportCount">0</strong>
+                </div>
+                <div class="metric-card">
+                  <span class="metric-label">分页位置</span>
+                  <strong id="antiSpamReportPage">1</strong>
+                </div>
+                <div class="metric-card">
+                  <span class="metric-label">查询状态</span>
+                  <strong id="antiSpamReportStatus">未查询</strong>
+                </div>
+              </div>
+
+              <div class="table-wrap antispam-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>群 / 频道 ID</th>
+                      <th>反馈管理员</th>
+                      <th>消息 ID</th>
+                      <th>首次反馈</th>
+                      <th>最后更新</th>
+                    </tr>
+                  </thead>
+                  <tbody id="antiSpamReportsBody"></tbody>
+                </table>
+              </div>
+
+              <div class="pager">
+                <button id="antiSpamPrevButton" class="secondary">上一页</button>
+                <span id="antiSpamPageText">第 1 页</span>
+                <button id="antiSpamNextButton" class="secondary">下一页</button>
               </div>
             </section>
           </div>
@@ -659,6 +728,6 @@
 
     <div id="toast" class="toast hidden"></div>
     <script src="/support_polling.js?v=20260503-1" defer></script>
-    <script src="/app.js?v=20260503-1" defer></script>
+    <script src="/app.js?v=20260522-1" defer></script>
   </body>
 </html>
